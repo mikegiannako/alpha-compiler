@@ -87,7 +87,7 @@ IGNORE         [ \t\n\r]
 }
 
 {IDENT} {
-    yylval.stringValue = strdup(yytext);
+    yylval.stringValue = safeStrDup(yytext, "copying ID name to yylval");
     return ID;
 }
 
@@ -103,7 +103,7 @@ IGNORE         [ \t\n\r]
 <STRING_STATE>\" {
 
     char* finalizedString = strBuffer_FinalizeString(stringBuffer);
-    yylval.stringValue = strdup(finalizedString);
+    yylval.stringValue = safeStrDup(finalizedString, "copying finalized string to yylval");
     strBuffer_Free(stringBuffer); // Free the string buffer
 
     BEGIN(INITIAL);

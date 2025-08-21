@@ -14,9 +14,11 @@
 
 ### Memory Allocation Conventions
 
-- Use `safeCalloc`, `safeRealloc`, and `safeFree` for memory management.
+- Use `safeCalloc`, `safeRealloc`, and `safeFree` for memory management as well as all the other functions in the memory_operations.h file
+- When using one of the functions above a "desc" field is required. This is the description of the operation you're trying to do using this function. This is used for easier debugging. The description should be of the form "duplicating string used for ..."
 
 ### Macros Conventions
 
 - Macro names should be in `ALL_CAPS` and use underscores to separate words.
 - Macro definitions should be contained withing `do { ... } while (0)` to ensure they behave like statements.
+- Exception to the rules above are the memory operation macros which are meant to be used as regular functions

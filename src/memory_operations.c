@@ -35,16 +35,30 @@ void* _safeRealloc(void* ptr, size_t newSize, const char* desc, const char* file
 
 void _safeFree(void** ptr, const char* desc, const char* file, int line) {
     if (!ptr) {
-        WARNING_MSG(file, line, "MEMORY", "Null was provided as a pointer-to-pointer while %s", desc);
+        WARNING_MSG(file, line, "LOGIC", "Null was provided as a pointer-to-pointer while %s", desc);
         return;
     }
     
     if (!*ptr) {
         // Freeing NULL is valid in C, so just return silently
-        WARNING_MSG(file, line, "MEMORY", "Attempted to free a NULL pointer while %s", desc);
+        WARNING_MSG(file, line, "LOGIC", "Attempted to free a NULL pointer while %s", desc);
         return;
     }
     
     free(*ptr);
     *ptr = NULL;
+}
+
+char* _safeStrDup(const char* src, const char* desc, const char* file, int line){
+    if (!src) {
+        ERROR_MSG(file, line, "LOGIC", "Null source string provided while %s", desc);
+        return NULL;
+    }
+
+    char* copy = strdup(src);
+    if (!copy) {
+        ERROR_MSG(file, line, "MEMORY", "String duplication failed while %s", desc);
+    }
+
+    return copy;
 }

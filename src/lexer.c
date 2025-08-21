@@ -5,7 +5,7 @@
 #define INITIAL_BUFFER_CAPACITY 32
 
 strBuffer_ptr strBuffer_Init(){
-    strBuffer_ptr buf = safeCalloc(1, sizeof(struct strBuffer), "allocating memory");
+    strBuffer_ptr buf = safeCalloc(1, sizeof(struct strBuffer), "allocating memory for strBuffer");
 
     buf->data = safeCalloc(INITIAL_BUFFER_CAPACITY, sizeof(char), "initializing string buffer data");
     buf->length = 0;
