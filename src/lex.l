@@ -7,6 +7,7 @@
     #include "../include/utils.h"
     #include "../include/uint_stack.h"
     #include "../include/error_macros.h"
+    #include "../include/memory_operations.h"
     #include "../build/parser.h"
 
     strBuffer_ptr stringBuffer;
