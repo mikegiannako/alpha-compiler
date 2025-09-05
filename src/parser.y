@@ -6,7 +6,7 @@
     #include <assert.h>
     #include "../include/lexer.h"
     #include "../include/utils.h"
-    #include "../include/uint_stack.h"
+    #include "../include/generic_stack.h"
 	// #include "../include/symtable.h"
     // #include "../include/intermediate.h"
     // #include "../include/parser_rules.h"
@@ -30,10 +30,10 @@
     extern FILE* yyin;
     extern FILE* yyout;
 
-    uiStack_ptr functionStack = NULL;
-    uiStack_ptr loopCounterStack = NULL;
-    uiStack_ptr funcstartJumpStack = NULL;
-    uiStack_ptr tempVarCountStack = NULL;
+    uintStack_ptr functionStack = NULL;
+    uintStack_ptr loopCounterStack = NULL;
+    uintStack_ptr funcstartJumpStack = NULL;
+    uintStack_ptr tempVarCountStack = NULL;
     unsigned int loopCounter = 0;
     unsigned int scope = 0;
 %}

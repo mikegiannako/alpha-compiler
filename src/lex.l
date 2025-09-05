@@ -5,14 +5,14 @@
 
     #include "../include/lexer.h"
     #include "../include/utils.h"
-    #include "../include/uint_stack.h"
+    #include "../include/generic_stack.h"
     #include "../include/error_macros.h"
     #include "../include/memory_operations.h"
     #include "../build/parser.h"
 
     strBuffer_ptr stringBuffer;
     unsigned int stringStartLine;
-    uiStack_ptr lineStack = NULL;
+    uintStack_ptr lineStack = NULL;
 
     char getEscapeChar(char c);
 %}
@@ -134,23 +134,23 @@ IGNORE         [ \t\n\r]
 }
 
 {MULTI_COMMENT} {
-    uiStack_Push(&lineStack, yylineno);
+    uintStack_Push(&lineStack, yylineno);
     BEGIN(MULTI_COMMENT_STATE);
 }
 
 <MULTI_COMMENT_STATE>{MULTI_COMMENT} {
-    uiStack_Push(&lineStack, yylineno);
+    uintStack_Push(&lineStack, yylineno);
 }
 
 <MULTI_COMMENT_STATE>{END_MULTI_COMMENT} {
-    unsigned int startLine = uiStack_Pop(&lineStack);
+    unsigned int startLine = uintStack_Pop(&lineStack);
     unsigned int startDigits = countDigits(startLine);
     unsigned int endDigits = countDigits(yylineno);
     unsigned int bufSize = startDigits + endDigits + 4; // 4 for " - "
     char buf[bufSize];
 
     sprintf(buf, "%d - %d", startLine, yylineno);
-    if(uiStack_IsEmpty(lineStack)){
+    if(uintStack_IsEmpty(lineStack)){
         // insertTokenInList(&token_list, MULTI_COMMENT, buf, "BLOCKED_COMMENT", yylineno);
         BEGIN(INITIAL);
     } else {
@@ -163,8 +163,8 @@ IGNORE         [ \t\n\r]
 <MULTI_COMMENT_STATE>. {}
 
 <MULTI_COMMENT_STATE><<EOF>> {
-    uiStack_Clear(lineStack);
-    ERROR_MSG(__FILE__, __LINE__, "LEXER", "Unterminated multi-line comment starting at line %d", uiStack_Top(lineStack));
+    uintStack_Clear(&lineStack);
+    ERROR_MSG(__FILE__, __LINE__, "LEXER", "Unterminated multi-line comment starting at line %d", uintStack_Top(lineStack));
 }
 
 {IGNORE} {}
