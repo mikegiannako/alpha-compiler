@@ -7,7 +7,7 @@
     #include "../include/lexer.h"
     #include "../include/utils.h"
     #include "../include/generic_stack.h"
-	// #include "../include/symtable.h"
+	#include "../include/symtable.h"
     // #include "../include/intermediate.h"
     // #include "../include/parser_rules.h"
     // #include "../include/quad.h"
@@ -396,6 +396,9 @@ int main(int argc, char** argv){
         strcpy(outputFileName, "output.bin");
         yyout = stdout;
     }
+
+    globalSymbolTable = symbolTable_Init();
+    currentSymbolTable = globalSymbolTable;
     
     yyparse();
 
