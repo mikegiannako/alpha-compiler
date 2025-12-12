@@ -31,7 +31,7 @@
     \
     type prefix##_Pop(prefix##_ptr *stack) { \
         if (prefix##_IsEmpty(*stack)) { \
-            ERROR_MSG(__FILE__, __LINE__, "STACK", "Stack underflow while %s", "popping from stack"); \
+            ERROR_MSG("STACK", "Stack underflow while %s", "popping from stack"); \
         } \
         \
         prefix##_ptr temp = *stack; \
@@ -45,7 +45,7 @@
     \
     type prefix##_Top(prefix##_ptr stack) { \
         if (prefix##_IsEmpty(stack)) { \
-            ERROR_MSG(__FILE__, __LINE__, "STACK", "Stack is empty while %s", "trying to access top element"); \
+            ERROR_MSG("STACK", "Stack is empty while %s", "trying to access top element"); \
         } \
         return stack->data; \
     } \

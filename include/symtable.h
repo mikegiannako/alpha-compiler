@@ -20,7 +20,7 @@ enum scopeSpace {
 };
 
 enum symbolType {
-    GLOBALVAR, LOCALVAR, FORMALVAR, USERFUNC, LIBFUNC
+    GLOBALVAR_SYMTYPE, LOCALVAR_SYMTYPE, FORMALVAR_SYMTYPE, USERFUNC_SYMTYPE, LIBFUNC_SYMTYPE
 };
 
 struct symbolTableEntry { 
@@ -55,8 +55,7 @@ extern symbolTable_ptr globalSymbolTable;
 extern symbolTable_ptr currentSymbolTable;
 
 symbolTable_ptr symbolTable_Init();
-void symbolTableEntry_Destroy(symbolTableEntry_ptr* entry);
-void symbolTable_Destroy(symbolTable_ptr* table);
+void symbolTable_FreeAll();
 void symbolTable_EnterScope();
 void symbolTable_ExitScope();
 symbolTableEntry_ptr symbolTable_Insert(const char *name, symbolType_enum type);

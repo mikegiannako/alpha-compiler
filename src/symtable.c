@@ -48,8 +48,19 @@ void symbolTable_Destroy(symbolTable_ptr* table){
             symbolTableEntry_Destroy(&toDelete);
         }
     }
+    intPtrStack_Clear(&((*table)->activeSymbolStack));
     safeFree(&((*table)->buckets), "freeing Symbol Table Buckets");
     safeFree(table, "freeing Symbol Table");
+}
+
+void symbolTable_FreeAll(){
+    symbolTable_ptr temp = globalSymbolTable;
+
+    while(temp != NULL){
+        symbolTable_ptr next = temp->next;
+        symbolTable_Destroy(&temp);
+        temp = next;
+    }
 }
 
 void symbolTable_EnterScope(){
@@ -63,7 +74,7 @@ void symbolTable_EnterScope(){
 
 void symbolTable_ExitScope(){
     if(currentSymbolTable->prev == NULL){
-        ERROR_MSG(__FILE__, __LINE__, "SYMTABLE", "Trying to exit global scope");
+        ERROR_MSG("SYMTABLE", "Trying to exit global scope");
     }
 
     while(!intPtrStack_IsEmpty(currentSymbolTable->activeSymbolStack)){
@@ -121,8 +132,8 @@ symbolTableEntry_ptr symbolTable_Insert(const char *name, symbolType_enum type){
     currentSymbolTable->buckets[index] = newEntry;
     currentSymbolTable->symbolCount++;
 
-    if(type == LIBFUNC) newEntry->totalFormals = 0;
-    else if(type == USERFUNC) {}
+    if(type == LIBFUNC_SYMTYPE) newEntry->totalFormals = 0;
+    else if(type == USERFUNC_SYMTYPE) {}
     else {
         // newEntry->space = currScopeSpace();
         // newEntry->offset = currScopeOffset();

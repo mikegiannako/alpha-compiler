@@ -35,61 +35,62 @@ IGNORE         [ \t\n\r]
 
 %%
 
-"="              { return ASSIGN; }
-"+"              { return ADD; }
-"-"              { return MINUS; }
-"*"              { return MUL; }
-"/"              { return DIV; }
-"%"              { return MOD; }
-"=="             { return EQUAL; }
-"!="             { return NOT_EQUAL; }
-"++"             { return INCREMENT; }
-"--"             { return DECREMENT; }
-">"              { return GREATER; }
-"<"              { return LESS; }
-">="             { return GREATER_EQUAL; }
-"<="             { return LESS_EQUAL; }
-"{"              { return LEFT_BRACKET; }
-"}"              { return RIGHT_BRACKET; }
-"["              { return LEFT_SQUARE; }
-"]"              { return RIGHT_SQUARE; }
-"("              { return LEFT_PARENTHESIS; }
-")"              { return RIGHT_PARENTHESIS; }
-";"              { return SEMICOLON; }
-","              { return COMMA; }
-":"              { return COLON; }
-"::"             { return DOUBLE_COLON; }
-"."              { return DOT; }
-".."             { return DOUBLE_DOT; }
-"if"             { return IF; }
-"else"           { return ELSE; }
-"while"          { return WHILE; }
-"for"            { return FOR; }
-"function"       { return FUNCTION; }
-"return"         { return RETURN; }
-"break"          { return BREAK; }
-"continue"       { return CONTINUE; }
-"and"            { return AND; }
-"not"            { return NOT; }
-"or"             { return OR; }
-"local"          { return LOCAL; }
-"true"           { return TRUE; }
-"false"          { return FALSE; }
-"nil"            { return NIL; }
+"="              { return ASSIGN_TOK; }
+"+"              { return ADD_TOK; }
+"-"              { return MINUS_TOK; }
+"*"              { return MUL_TOK; }
+"/"              { return DIV_TOK; }
+"%"              { return MOD_TOK; }
+"=="             { return EQUAL_TOK; }
+"!="             { return NOT_EQUAL_TOK; }
+"++"             { return INCREMENT_TOK; }
+"--"             { return DECREMENT_TOK; }
+">"              { return GREATER_TOK; }
+"<"              { return LESS_TOK; }
+">="             { return GREATER_EQUAL_TOK; }
+"<="             { return LESS_EQUAL_TOK; }
+"{"              { return LEFT_BRACKET_TOK; }
+"}"              { return RIGHT_BRACKET_TOK; }
+"["              { return LEFT_SQUARE_TOK; }
+"]"              { return RIGHT_SQUARE_TOK; }
+"("              { return LEFT_PARENTHESIS_TOK; }
+")"              { return RIGHT_PARENTHESIS_TOK; }
+";"              { return SEMICOLON_TOK; }
+","              { return COMMA_TOK; }
+":"              { return COLON_TOK; }
+"::"             { return DOUBLE_COLON_TOK; }
+"."              { return DOT_TOK; }
+".."             { return DOUBLE_DOT_TOK; }
+"if"             { return IF_TOK; }
+"else"           { return ELSE_TOK; }
+"while"          { return WHILE_TOK; }
+"for"            { return FOR_TOK; }
+"function"       { return FUNCTION_TOK; }
+"return"         { return RETURN_TOK; }
+"break"          { return BREAK_TOK; }
+"continue"       { return CONTINUE_TOK; }
+"and"            { return AND_TOK; }
+"not"            { return NOT_TOK; }
+"or"             { return OR_TOK; }
+"local"          { return LOCAL_TOK; }
+"true"           { return TRUE_TOK; }
+"false"          { return FALSE_TOK; }
+"nil"            { return NIL_TOK; }
 
 {REAL} {
     yylval.numValue = atof(yytext);
-    return REAL;
+    return REAL_TOK;
 }
 
 {INTEGER} {
     yylval.numValue = atoi(yytext);
-    return INTEGER;
+    return INTEGER_TOK;
 }
 
 {IDENT} {
+    // TODO: perhaps implement global list of string pointer that need to be freed at the end of the program
     yylval.stringValue = safeStrDup(yytext, "copying ID name to yylval");
-    return ID;
+    return ID_TOK;
 }
 
 {SINGLE_COMMENT} {}
@@ -104,15 +105,16 @@ IGNORE         [ \t\n\r]
 <STRING_STATE>\" {
 
     char* finalizedString = strBuffer_FinalizeString(stringBuffer);
+    // TODO: perhaps implement global list of string pointer that need to be freed at the end of the program
     yylval.stringValue = safeStrDup(finalizedString, "copying finalized string to yylval");
     strBuffer_Free(stringBuffer); // Free the string buffer
 
     BEGIN(INITIAL);
-    return STRING;
+    return STRING_TOK;
 }
 
 <STRING_STATE><<EOF>> {
-    ERROR_MSG(__FILE__, __LINE__, "LEXER", "Unterminated string literal starting at line %d", stringStartLine);
+    ERROR_MSG("LEXER", "Unterminated string literal starting at line %d", stringStartLine);
     return -1;
 }
 
@@ -124,7 +126,7 @@ IGNORE         [ \t\n\r]
 
         // check if we hit eof
         if(next == EOF){
-            ERROR_MSG(__FILE__, __LINE__, "LEXER", "Unterminated escape sequence in string starting at line %d", stringStartLine);
+            ERROR_MSG("LEXER", "Unterminated escape sequence in string starting at line %d", stringStartLine);
         }
 
         temp = getEscapeChar(next);
@@ -164,13 +166,13 @@ IGNORE         [ \t\n\r]
 
 <MULTI_COMMENT_STATE><<EOF>> {
     uintStack_Clear(&lineStack);
-    ERROR_MSG(__FILE__, __LINE__, "LEXER", "Unterminated multi-line comment starting at line %d", uintStack_Top(lineStack));
+    ERROR_MSG("LEXER", "Unterminated multi-line comment starting at line %d", uintStack_Top(lineStack));
 }
 
 {IGNORE} {}
 
 . {
-    ERROR_MSG(__FILE__, __LINE__, "LEXER", "Unexpected character '%c' at line %d", yytext[0], yylineno);
+    ERROR_MSG("LEXER", "Unexpected character '%c' at line %d", yytext[0], yylineno);
 }
 
 %%
