@@ -204,4 +204,97 @@ symbolTableEntry_ptr symbolTable_GlobalLookup(const char *name){
     return NULL;
 }
 
-void symbolTable_Print();
+static const char* symbolType_ToString(symbolType_enum type){
+    switch(type){
+        case GLOBALVAR_SYMTYPE: return "GLOBALVAR";
+        case LOCALVAR_SYMTYPE: return "LOCALVAR";
+        case FORMALVAR_SYMTYPE: return "FORMALVAR";
+        case USERFUNC_SYMTYPE: return "USERFUNC";
+        case LIBFUNC_SYMTYPE: return "LIBFUNC";
+        default: return "UNKNOWN";
+    }
+}
+
+static const char* scopeSpace_ToString(scopeSpace_enum space){
+    switch(space){
+        case PROGRAMVAR: return "PROGRAMVAR";
+        case FUNCTIONLOCAL: return "FUNCTIONLOCAL";
+        case FORMALARG: return "FORMALARG";
+        default: return "UNKNOWN";
+    }
+}
+
+void symbolTable_Print(){
+    printf("\n");
+    printf("====================================================================================================================\n");
+    printf("                                                     SYMBOL TABLE                                                            \n");
+    printf("====================================================================================================================\n\n");
+
+    symbolTable_ptr currentScope = globalSymbolTable;
+    unsigned int scopeNum = 0;
+
+    while(currentScope != NULL){
+        /* Skip if this is the last scope and it's empty */
+        if(currentScope->next == NULL && currentScope->symbolCount == 0){
+            break;
+        }
+
+        printf("\033[33m                                             ----- Scope %u ", scopeNum);
+        if(scopeNum == 0){
+            printf("(Global) ");
+        }
+        printf("-----\033[0m\n\n");
+
+        if(currentScope->symbolCount == 0){
+            printf("  (empty)\n\n");
+            currentScope = currentScope->next;
+            scopeNum++;
+            continue;
+        }
+
+        printf("%-20s %-15s %-6s %-16s %-8s %s\n",
+               "Name", "Type", "Line", "Space", "Offset", "Function Info");
+        printf("--------------------------------------------------------------------------------------------------------------------\n");
+
+        for(unsigned int i = 0; i < tableSizes[currentScope->capacityIndex]; i++){
+            symbolTableEntry_ptr entry = currentScope->buckets[i];
+            while(entry != NULL){
+                if(entry->type == LIBFUNC_SYMTYPE){
+                    /* For library functions, print only name and type in purple */
+                    printf("%-20s \033[35m%-15s\033[0m\n",
+                           entry->name,
+                           symbolType_ToString(entry->type));
+                } else {
+                    /* For all other types, print full information */
+                    printf("%-20s %-15s %-6u ",
+                           entry->name,
+                           symbolType_ToString(entry->type),
+                           entry->line);
+
+                    if(entry->type == USERFUNC_SYMTYPE){
+                        printf("%-16s %-8s ", "-", "-");
+                        printf("addr:%-4u locals:%-2u formals:%-2u",
+                               entry->iaddress,
+                               entry->totalLocals,
+                               entry->totalFormals);
+                    } else {
+                        printf("%-16s %-8u ",
+                               scopeSpace_ToString(entry->space),
+                               entry->offset);
+                        printf("-");
+                    }
+
+                    printf("\n");
+                }
+
+                entry = entry->next;
+            }
+        }
+
+        printf("\n");
+        currentScope = currentScope->next;
+        scopeNum++;
+    }
+
+    printf("====================================================================================================================\n\n");
+}

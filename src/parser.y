@@ -63,7 +63,7 @@
 %left LEFT_BRACKET_TOK RIGHT_BRACKET_TOK
 %left LEFT_PARENTHESIS_TOK RIGHT_PARENTHESIS_TOK
 
-%type<symbolValue> lvalue
+%type<symbolValue> lvalue funcdeclare
 
 %%
 
@@ -193,9 +193,9 @@ block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_lis
 funcdef:        funcdeclare funcparams funcbody { RULE_PRINT("funcdef <- FUNCTION (ID) ( idlist ) block\n"); } 
                 ;
 
-funcdeclare:    FUNCTION_TOK ID_TOK             { RULE_PRINT("funcdeclare <- FUNCTION ID\n"); }
-                | FUNCTION_TOK                  { RULE_PRINT("funcdeclare <- FUNCTION\n"); }
-                ;
+funcdeclare[funcdecl]:  FUNCTION_TOK ID_TOK[id]         { HANDLE_FUNCDECLARE_ID(&$funcdecl, $id); RULE_PRINT("funcdeclare <- FUNCTION ID\n"); }
+                        | FUNCTION_TOK                  { HANDLE_FUNCDECLARE_ANON(&$funcdecl); RULE_PRINT("funcdeclare <- FUNCTION\n"); }
+                        ;
 
 funcparams:     LEFT_PARENTHESIS_TOK {scope++;} idlist {scope--;} RIGHT_PARENTHESIS_TOK { RULE_PRINT("funcparams <- ( idlist )\n"); }
                 ;
@@ -302,6 +302,8 @@ int main(int argc, char** argv){
     symbolTable_Insert("sin", LIBFUNC_SYMTYPE);
     
     yyparse();
+
+    symbolTable_Print();
 
     // Cleaning Up
     symbolTable_FreeAll();

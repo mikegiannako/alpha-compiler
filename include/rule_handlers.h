@@ -29,6 +29,11 @@ void HANDLE_LVALUE_ID(symbolTableEntry_ptr *lvalue, const char* id);
 void HANDLE_LVALUE_LOCAL_ID(symbolTableEntry_ptr *lvalue, const char* id);
 void HANDLE_LVALUE_GLOBAL_ID(symbolTableEntry_ptr *lvalue, const char* id);
 
+//========================
+
+void HANDLE_FUNCDECLARE_ID(symbolTableEntry_ptr *lvalue, const char* id);
+void HANDLE_FUNCDECLARE_ANON(symbolTableEntry_ptr *lvalue);
+
 #endif
 
 // #include "../include/parser_rules.h"

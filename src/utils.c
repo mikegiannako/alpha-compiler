@@ -3,6 +3,9 @@
 
 #include "../include/utils.h"
 
+/**
+ * Returns the count of digits of an unsigned integer
+ */
 unsigned int countDigits(unsigned int n){
     unsigned int count = 0;
     while(n != 0){
