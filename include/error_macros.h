@@ -7,7 +7,10 @@
 
 #define RESET_TEXT "\033[0m"
 
-// Internal macros - don't call these directly
+// COMPILER DEVELOPER ERROR MACROS
+// To be used for internal compiler errors/debugging (shows compiler source location)
+
+// Internal macros - not to be called directly 
 #define _ERROR_MSG(filename, line, error_type, format, ...) \
     do { \
         fprintf(stderr, RED_TEXT "[%s ERROR]" RESET_TEXT " - ", error_type); \
@@ -23,11 +26,33 @@
         fprintf(stderr, " - (%s @ %d)\n", filename, line); \
     } while (0)
 
-// Public macros that automatically include file and line information
+// Public macros that automatically include compiler source file and line information
 #define ERROR_MSG(error_type, format, ...) \
     _ERROR_MSG(__FILE__, __LINE__, error_type, format, ##__VA_ARGS__)
 
 #define WARNING_MSG(warning_type, format, ...) \
     _WARNING_MSG(__FILE__, __LINE__, warning_type, format, ##__VA_ARGS__)
+
+
+
+// USER-FACING ERROR MACROS
+// To be used for compilation errors in Alpha source code (no compiler internals exposed)
+
+// Error without line number (general compilation error)
+#define USER_ERROR(error_type, format, ...) \
+    do { \
+        fprintf(stderr, RED_TEXT "[%s ERROR]" RESET_TEXT " - ", error_type); \
+        fprintf(stderr, format, ##__VA_ARGS__); \
+        fprintf(stderr, "\n"); \
+        exit(EXIT_FAILURE); \
+    } while (0)
+
+// Warning without line number
+#define USER_WARNING(warning_type, format, ...) \
+    do { \
+        fprintf(stderr, ORANGE_TEXT "[%s WARNING]" RESET_TEXT " - ", warning_type); \
+        fprintf(stderr, format, ##__VA_ARGS__); \
+        fprintf(stderr, "\n"); \
+    } while (0)
 
 #endif // _ERRORS_H_

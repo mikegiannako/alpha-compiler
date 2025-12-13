@@ -51,9 +51,6 @@ struct symbolTable {
     struct symbolTable* prev;
 };
 
-extern symbolTable_ptr globalSymbolTable;
-extern symbolTable_ptr currentSymbolTable;
-
 symbolTable_ptr symbolTable_Init();
 void symbolTable_FreeAll();
 void symbolTable_EnterScope();

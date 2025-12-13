@@ -8,12 +8,7 @@
     #include "../include/utils.h"
     #include "../include/generic_stack.h"
 	#include "../include/symtable.h"
-    // #include "../include/intermediate.h"
-    // #include "../include/parser_rules.h"
-    // #include "../include/quad.h"
-    // #include "../include/generator.h"
-    // #include "../include/vm_code.h"
-    // #include "../include/binary.h"
+    #include "../include/rule_handlers.h"
 
     #ifdef DEBUG
         #define RULE_PRINT(rule) {fprintf(stderr, "LINE: %d ", yylineno); fprintf(stderr, rule);}
@@ -30,7 +25,7 @@
     extern FILE* yyin;
     extern FILE* yyout;
 
-    uintStack_ptr functionStack = NULL;
+    uintStack_ptr functionScopeStack = NULL;
     uintStack_ptr loopCounterStack = NULL;
     uintStack_ptr funcstartJumpStack = NULL;
     uintStack_ptr tempVarCountStack = NULL;
@@ -43,12 +38,8 @@
 %union{
 	const char* stringValue;
 	float numValue;
-	// struct SymbolTableEntry* node_value;
-    // struct expr* expr_value;
-    // struct stmt* stmt_value;
     unsigned int uintValue;
-    // struct call* call_value;
-    // struct forLoopPrefix* forLoopPrefix_value;
+    struct symbolTableEntry* symbolValue;
 }
 
 %token <stringValue> STRING_TOK ID_TOK
@@ -59,14 +50,6 @@
 %token SEMICOLON_TOK COMMA_TOK COLON_TOK DOUBLE_COLON_TOK DOT_TOK DOUBLE_DOT_TOK ELSE_TOK
 %token IF_TOK WHILE_TOK FOR_TOK FUNCTION_TOK RETURN_TOK BREAK_TOK CONTINUE_TOK AND_TOK NOT_TOK OR_TOK LOCAL_TOK TRUE_TOK FALSE_TOK NIL_TOK
 %token UMINUS_TOK
-
-/* %type <node_value> funcdeclare funcdef
-%type <uint_value> funcbody ifprefix elseprefix whilestart whileexpr N M idlist idlist_tail funcparams
-%type <expr_value> lvalue member primary assign_exprcall objectdef indexed indexed_tail indexedelem expr elist term const elist_tail
-%type <call_value> callsuffix normcall methodcall
-%type <stmt_value> block stmt stmt_list ifstmt whilestmt forstmt returnstmt loopstmt break continue 
-%type <forLoopPrefix_value> forprefix */
-
 
 %right ASSIGN_TOK 
 %right OR_TOK
@@ -80,6 +63,8 @@
 %left LEFT_BRACKET_TOK RIGHT_BRACKET_TOK
 %left LEFT_PARENTHESIS_TOK RIGHT_PARENTHESIS_TOK
 
+%type<symbolValue> lvalue
+
 %%
 
 
@@ -90,14 +75,14 @@ stmt_list:      stmt_list stmt          { RULE_PRINT("statement list <- statemen
                 | stmt 		            { RULE_PRINT("statement list <- statement\n");}
                 ;   
 
-break:          BREAK_TOK SEMICOLON_TOK         { RULE_PRINT("break <- BREAK ;\n");}
+break:          BREAK_TOK SEMICOLON_TOK         { HANDLE_BREAK(); RULE_PRINT("break <- BREAK ;\n");}
                 ;   
 
-continue:       CONTINUE_TOK SEMICOLON_TOK      { RULE_PRINT("continue <- CONTINUE ;\n");}
+continue:       CONTINUE_TOK SEMICOLON_TOK      { HANDLE_CONTINUE(); RULE_PRINT("continue <- CONTINUE ;\n");}
                 ;   
 
-returnstmt:     RETURN_TOK expr SEMICOLON_TOK   { RULE_PRINT("returnstmt <- RETURN expression ;\n");}
-                | RETURN_TOK SEMICOLON_TOK      { RULE_PRINT("returnstmt <- RETURN ;\n");}
+returnstmt:     RETURN_TOK expr SEMICOLON_TOK   { HANDLE_RETURN(); RULE_PRINT("returnstmt <- RETURN expression ;\n");}
+                | RETURN_TOK SEMICOLON_TOK      { HANDLE_RETURN(); RULE_PRINT("returnstmt <- RETURN ;\n");}
                 ;   
 
 stmt:           expr SEMICOLON_TOK      { RULE_PRINT("statement <- expression ;\n");}
@@ -133,10 +118,10 @@ expr:           assign_expr			            { RULE_PRINT("expression <- assign_exp
 term:           LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK   { RULE_PRINT("term <- ( expression )\n");}
                 | MINUS_TOK expr %prec UMINUS_TOK		{ RULE_PRINT("term <- - expression\n");}
                 | NOT_TOK expr                          { RULE_PRINT("term <- NOT expression\n");}
-                | INCREMENT_TOK lvalue                  { RULE_PRINT("term <- ++ lvalue\n");}
-                | lvalue INCREMENT_TOK                  { RULE_PRINT("term <- lvalue ++\n");}
-                | DECREMENT_TOK lvalue                  { RULE_PRINT("term <- -- lvalue\n");}
-                | lvalue DECREMENT_TOK                  { RULE_PRINT("term <- lvalue --\n");}
+                | INCREMENT_TOK lvalue[lval]            { HANDLE_TERM_INC_LVAL($lval); RULE_PRINT("term <- ++ lvalue\n");}
+                | lvalue[lval]  INCREMENT_TOK           { HANDLE_TERM_LVAL_INC($lval); RULE_PRINT("term <- lvalue ++\n");}
+                | DECREMENT_TOK lvalue[lval]            { HANDLE_TERM_DEC_LVAL($lval); RULE_PRINT("term <- -- lvalue\n");}
+                | lvalue[lval]  DECREMENT_TOK           { HANDLE_TERM_LVAL_DEC($lval); RULE_PRINT("term <- lvalue --\n");}
                 | primary                               { RULE_PRINT("term <- primary\n");}
                 ;       
 
@@ -150,10 +135,10 @@ primary:        lvalue         { RULE_PRINT("primary <- lvalue\n");}
                 | const        { RULE_PRINT("primary <- const\n");}
                 ;
 
-lvalue:         ID_TOK                      { RULE_PRINT("lvalue <- ID\n");}
-                | LOCAL_TOK ID_TOK          { RULE_PRINT("lvalue <- LOCAL ID\n");}
-                | DOUBLE_COLON_TOK ID_TOK   { RULE_PRINT("lvalue <- :: ID\n");}
-                | member                    { RULE_PRINT("lvalue <- member\n");}
+lvalue[lval]:   ID_TOK[id]                      { HANDLE_LVALUE_ID(&$lval, $id); RULE_PRINT("lvalue <- ID\n");}
+                | LOCAL_TOK ID_TOK[id]          { HANDLE_LVALUE_LOCAL_ID(&$lval, $id); RULE_PRINT("lvalue <- LOCAL ID\n");}
+                | DOUBLE_COLON_TOK ID_TOK[id]   { HANDLE_LVALUE_GLOBAL_ID(&$lval, $id); RULE_PRINT("lvalue <- :: ID\n");}
+                | member                        { $lval = NULL; RULE_PRINT("lvalue <- member\n");}
                 ;
 
 member:         lvalue DOT_TOK ID_TOK                                   { RULE_PRINT("member <- lvalue . ID\n");}
@@ -201,7 +186,7 @@ indexed_tail: 	COMMA_TOK indexedelem indexed_tail 	{ RULE_PRINT("indexed_tail <-
 indexedelem:    LEFT_BRACKET_TOK expr COLON_TOK expr RIGHT_BRACKET_TOK  { RULE_PRINT("indexedelem <- { expr : expr }\n");}
                 ;
 
-block:          LEFT_BRACKET_TOK stmt_list RIGHT_BRACKET_TOK    { RULE_PRINT("block <- { stmt_list }\n"); }
+block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_list { scope--;  symbolTable_ExitScope(); } RIGHT_BRACKET_TOK    { RULE_PRINT("block <- { stmt_list }\n"); }
                 | LEFT_BRACKET_TOK RIGHT_BRACKET_TOK            { RULE_PRINT("block <- { }\n"); }
                 ;
 
@@ -215,10 +200,10 @@ funcdeclare:    FUNCTION_TOK ID_TOK             { RULE_PRINT("funcdeclare <- FUN
 funcparams:     LEFT_PARENTHESIS_TOK {scope++;} idlist {scope--;} RIGHT_PARENTHESIS_TOK { RULE_PRINT("funcparams <- ( idlist )\n"); }
                 ;
 
-funcblockstart: { uintStack_Push(&loopCounterStack, loopCounter); loopCounter = 0; }
+funcblockstart: { uintStack_Push(&loopCounterStack, loopCounter); loopCounter = 0; uintStack_Push(&functionScopeStack, scope); }
                 ;
 
-funcblockend:   { loopCounter = uintStack_Pop(&loopCounterStack); }
+funcblockend:   { loopCounter = uintStack_Pop(&loopCounterStack); uintStack_Pop(&functionScopeStack); }
                 ;
 
 funcbody:       funcblockstart block funcblockend   { }
@@ -276,93 +261,6 @@ forprefix:      FOR_TOK LEFT_PARENTHESIS_TOK elist SEMICOLON_TOK expr SEMICOLON_
 
 %%
 
-/*
-int yyerror (const char * s){
-	if ((strstr(s,"$end"))){
-		printf("Unexpected reach of the EOF.\n");
-	}else{
-		printf(RED);
-		printf("ERROR_TOK : %s --- Line : %d  Token : %s\n", s, yylineno, yylval.string_value);
-		printf(RESET);
-	}
-	return 0;
-}
-
-int main(int argc, char** argv){
-    if(argc < 2 || argc > 3){
-        printf("Usage: %s <input_file> (<output_file>)\n", argv[0]);
-        return 1;
-    }
-
-    yyin = fopen(argv[1], "r");
-
-    if(yyin == NULL){
-        printf("Error: File not found\n");
-        return 1;
-    }
-
-    char* outputFileName = NULL;
-
-    if(argc == 3){
-        outputFileName = malloc(strlen(argv[2]) + 1);
-        strcpy(outputFileName, argv[2]);
-    }else{
-        outputFileName = malloc(strlen("output.bin") + 1);
-        strcpy(outputFileName, "output.bin");
-        yyout = stdout;
-    }
-
-    #ifdef DEBUG
-        printf("Inserting library functions...\n");
-    #endif
-
-    SymtableInit();
-    symbolTable_Insert("print", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("input", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("objectmemberkeys", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("objecttotalmembers", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("objectcopy", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("totalarguments", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("argument", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("typeof", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("strtonum", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("sqrt", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("cos", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("sin", LIBFUNC_SYMTYPE);
-
-    #ifdef DEBUG
-        printf("Parsing...\n");
-    #endif
-    
-    yyparse();
-
-    #ifdef DEBUG
-        printf("\n\nPrinting Symbol Table...\n");
-        SymtablePrint();
-        printf("\n\n");
-        printf("\nPrinting Quads...\n");
-    #endif
-    
-    printQuads();
-
-    printf("\n\b");
-    #ifdef DEBUG
-        printf("\nGenerating Instructions...\n");
-    #endif
-
-    generateInstructions();
-
-    #ifdef DEBUG
-        printf("Printing Instructions...\n");
-    #endif
-
-    printInstructions();
-
-    writeBinaryFile(outputFileName);
-
-    SymtableDestroy();
-} */
-
 int main(int argc, char** argv){
      if(argc < 2 || argc > 3){
         printf("Usage: %s <input_file> (<output_file>)\n", argv[0]);
@@ -407,11 +305,11 @@ int main(int argc, char** argv){
 
     // Cleaning Up
     symbolTable_FreeAll();
-    uintStack_Clear(&functionStack);
+    uintStack_Clear(&functionScopeStack);
     uintStack_Clear(&loopCounterStack);
     uintStack_Clear(&funcstartJumpStack);
     uintStack_Clear(&tempVarCountStack);
     free(outputFileName);
-    
+
     return 0;
 }
