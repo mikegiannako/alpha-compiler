@@ -8,19 +8,19 @@
 
 void HANDLE_BREAK(){
     if(loopCounter == 0){
-        USER_WARNING("SYNTAX", "Attempted to `break` outside of loop - line %d", yylineno);
+        USER_WARNING("SYNTAX", "Attempted to `break` outside of loop");
     }
 }
 
 void HANDLE_CONTINUE(){
     if(loopCounter == 0){
-        USER_WARNING("SYNTAX", "Attempted to `continue` outside of loop - line %d", yylineno);
+        USER_WARNING("SYNTAX", "Attempted to `continue` outside of loop");
     }
 }
 
 void HANDLE_RETURN(){
     if(uintStack_IsEmpty(functionScopeStack)){
-        USER_WARNING("SYNTAX", "Attempted to `return` outside of function - line %d", yylineno);
+        USER_WARNING("SYNTAX", "Attempted to `return` outside of function");
     }
 }
 
@@ -30,11 +30,11 @@ void check_arithop_lvalue_eligibility(symbolTableEntry_ptr lvalue, const char* o
     if(!lvalue) return;
     
     if(lvalue->type == LIBFUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to %s Library Function `%s` - line %d", operator, lvalue->name, yylineno);
+        USER_WARNING("SYNTAX", "Attempted to %s Library Function `%s`", operator, lvalue->name);
     }
 
     if(lvalue->type == USERFUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to %s User Function `%s` found in scope %d - line %d", operator, lvalue->name, lvalue->scope, yylineno);
+        USER_WARNING("SYNTAX", "Attempted to %s User Function `%s` found in scope %d", operator, lvalue->name, lvalue->scope);
     }
 
 }
@@ -70,7 +70,7 @@ void HANDLE_LVALUE_ID(symbolTableEntry_ptr *lvalue, const char* id){
     if(entry->scope != 0 && !uintStack_IsEmpty(functionScopeStack)){
         unsigned int func_scope = uintStack_Top(functionScopeStack);
         if(entry->scope <= func_scope){
-            USER_WARNING("SYNTAX", "Symbol `%s` (scope %d) cannot be reached within last open function's block (scope %d) - line %d", id, entry->scope, func_scope, yylineno);
+            USER_WARNING("SYNTAX", "Symbol `%s` (scope %d) cannot be reached within last open function's block (scope %d)", id, entry->scope, func_scope);
         }
     }
     
@@ -86,7 +86,7 @@ void HANDLE_LVALUE_LOCAL_ID(symbolTableEntry_ptr *lvalue, const char* id){
     if(scope != 0){
         *lvalue = symbolTable_GlobalLookup(id);
         if((*lvalue) && (*lvalue)->type == LIBFUNC_SYMTYPE){
-            USER_WARNING("SYNTAX", "`local %s` attempting to overshadow Library Function `%s` - line %d", id, id, yylineno);
+            USER_WARNING("SYNTAX", "`local %s` attempting to overshadow Library Function `%s`", id, id);
             return;
         }
     }
@@ -99,7 +99,7 @@ void HANDLE_LVALUE_GLOBAL_ID(symbolTableEntry_ptr *lvalue, const char* id){
     *lvalue = symbolTable_GlobalLookup(id);
 
     if(!*lvalue){
-        USER_WARNING("SYNTAX", "Symbol `%s` does not exist in global scope - line %d", id, yylineno);
+        USER_WARNING("SYNTAX", "Symbol `%s` does not exist in global scope", id);
     }
 }
 
@@ -109,7 +109,7 @@ void HANDLE_MEMBER_LVALUE_ID(symbolTableEntry_ptr lvalue, const char* id){
     if(!lvalue) return;
 
     if(lvalue->type == LIBFUNC_SYMTYPE || lvalue->type == USERFUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to get key '%s' on function '%s' instead of an object - line %d", id, lvalue->name, yylineno);
+        USER_WARNING("SYNTAX", "Attempted to get key '%s' on function '%s' instead of an object", id, lvalue->name);
     }
 }
 
@@ -117,7 +117,7 @@ void HANDLE_MEMBER_LVALUE_EXPR(symbolTableEntry_ptr lvalue){
     if(!lvalue) return;
 
     if(lvalue->type == LIBFUNC_SYMTYPE || lvalue->type == USERFUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to get member value on function '%s' instead of an object - line %d", lvalue->name, yylineno);
+        USER_WARNING("SYNTAX", "Attempted to get member value on function '%s' instead of an object", lvalue->name);
     }
 }
 
@@ -128,7 +128,7 @@ void HANDLE_CALL_LVALUE_CALLSUFFIX(symbolTableEntry_ptr lvalue, Call_ptr callsuf
     if(!lvalue) return;
 
     if((lvalue->type == LIBFUNC_SYMTYPE || lvalue->type == USERFUNC_SYMTYPE) && callsuffix->isMethodCall){
-        USER_WARNING("SYNTAX", "Attempted to call method '%s' on function '%s' instead of an object - line %d", callsuffix->method_name, lvalue->name, yylineno);
+        USER_WARNING("SYNTAX", "Attempted to call method '%s' on function '%s' instead of an object", callsuffix->method_name, lvalue->name);
     }
 }
 
@@ -148,11 +148,11 @@ void HANDLE_FUNCDECLARE_ID(symbolTableEntry_ptr *lvalue, const char* id){
     }
 
     if(entry->type == USERFUNC_SYMTYPE && entry->scope == scope){
-        USER_WARNING("SYNTAX", "User Function `%s` has already been declared in the same scope - line %d", id, yylineno);
+        USER_WARNING("SYNTAX", "User Function `%s` has already been declared in the same scope", id);
     } else if((entry->type == LOCALVAR_SYMTYPE || entry->type == GLOBALVAR_SYMTYPE) && entry->scope == scope){
-        USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a User Function (already exists as Variable in the same scope) - line %d", id, yylineno);
+        USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a User Function (already exists as Variable in the same scope)", id);
     } else if(entry->type == LIBFUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "User Function '%s' declaration attempting to overshadow Library Function - line %d", id, yylineno);
+        USER_WARNING("SYNTAX", "User Function '%s' declaration attempting to overshadow Library Function", id);
     }
 
     *lvalue = symbolTable_Insert(id, USERFUNC_SYMTYPE);
@@ -172,16 +172,18 @@ void HANDLE_FUNCDECLARE_ANON(symbolTableEntry_ptr *lvalue){
 void HANDLE_IDLIST(symbolTableEntry_ptr *idlist, const char* id, symbolTableEntry_ptr list_tail){
     assert(id);
 
-    symbolTableEntry_ptr localEntry = symbolTable_LocalLookup(id);
-    symbolTableEntry_ptr globalEntry = symbolTable_GlobalLookup(id);
+    symbolTableEntry_ptr entry = symbolTable_Lookup(id);
 
-
-    if(localEntry  && localEntry->type == FORMALVAR_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to redeclare symbol '%s' as a Formal Argument (already exists as Formal Argument in the same function declaration) - line %d", id, yylineno);
-    } else if(globalEntry && globalEntry->type == LIBFUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Formal Argument '%s' declaration attempting to overshadow Library Function - line %d", id, yylineno);
-    } else {
-        *idlist = symbolTable_Insert(id, FORMALVAR_SYMTYPE);
-        // TODO: Link the formal args via tail when changed to Expressions instead of symbols
+    if(entry){
+        if(entry->type == USERFUNC_SYMTYPE){
+            USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a Formal Argument (already exists as active User Function in scope %d)", id, entry->scope);
+            return;
+        } else if(entry->type == LIBFUNC_SYMTYPE){
+            USER_WARNING("SYNTAX", "Formal Argument '%s' declaration attempting to overshadow Library Function", id);
+            return;
+        }
     }
+
+    *idlist = symbolTable_Insert(id, FORMALVAR_SYMTYPE);
+    // TODO: Link the formal args via tail when changed to Expressions instead of symbols
 }

@@ -31,9 +31,13 @@
     uintStack_ptr tempVarCountStack = NULL;
     unsigned int loopCounter = 0;
     unsigned int scope = 0;
+    const char* sourceFileName = "unknown";
 %}
 
 %start program
+
+%define parse.error verbose
+%define parse.lac full
 
 %union{
 	const char* stringValue;
@@ -43,13 +47,24 @@
     struct call* callValue;
 }
 
-%token <stringValue> STRING_TOK ID_TOK
-%token <numValue> REAL_TOK INTEGER_TOK
+%token <stringValue> STRING_TOK "string" ID_TOK "identifier"
+%token <numValue> REAL_TOK "real number" INTEGER_TOK "integer"
 
-%token SINGLE_COMMENT_TOK ASSIGN_TOK ADD_TOK MINUS_TOK MUL_TOK DIV_TOK MOD_TOK EQUAL_TOK NOT_EQUAL_TOK INCREMENT_TOK DECREMENT_TOK GREATER_TOK GREATER_EQUAL_TOK
-%token LESS_TOK LESS_EQUAL_TOK LEFT_BRACKET_TOK RIGHT_BRACKET_TOK LEFT_SQUARE_TOK RIGHT_SQUARE_TOK LEFT_PARENTHESIS_TOK RIGHT_PARENTHESIS_TOK
-%token SEMICOLON_TOK COMMA_TOK COLON_TOK DOUBLE_COLON_TOK DOT_TOK DOUBLE_DOT_TOK ELSE_TOK
-%token IF_TOK WHILE_TOK FOR_TOK FUNCTION_TOK RETURN_TOK BREAK_TOK CONTINUE_TOK AND_TOK NOT_TOK OR_TOK LOCAL_TOK TRUE_TOK FALSE_TOK NIL_TOK
+%token SINGLE_COMMENT_TOK "comment"
+%token ASSIGN_TOK "="
+%token ADD_TOK "+" MINUS_TOK "-" MUL_TOK "*" DIV_TOK "/" MOD_TOK "%"
+%token EQUAL_TOK "==" NOT_EQUAL_TOK "!="
+%token INCREMENT_TOK "++" DECREMENT_TOK "--"
+%token GREATER_TOK ">" GREATER_EQUAL_TOK ">=" LESS_TOK "<" LESS_EQUAL_TOK "<="
+%token LEFT_BRACKET_TOK "{" RIGHT_BRACKET_TOK "}"
+%token LEFT_SQUARE_TOK "[" RIGHT_SQUARE_TOK "]"
+%token LEFT_PARENTHESIS_TOK "(" RIGHT_PARENTHESIS_TOK ")"
+%token SEMICOLON_TOK ";" COMMA_TOK "," COLON_TOK ":" DOUBLE_COLON_TOK "::" DOT_TOK "." DOUBLE_DOT_TOK ".."
+%token IF_TOK "if" ELSE_TOK "else" WHILE_TOK "while" FOR_TOK "for"
+%token FUNCTION_TOK "function" RETURN_TOK "return"
+%token BREAK_TOK "break" CONTINUE_TOK "continue"
+%token AND_TOK "and" NOT_TOK "not" OR_TOK "or"
+%token LOCAL_TOK "local" TRUE_TOK "true" FALSE_TOK "false" NIL_TOK "nil"
 %token UMINUS_TOK
 
 %right ASSIGN_TOK 
@@ -64,7 +79,7 @@
 %left LEFT_BRACKET_TOK RIGHT_BRACKET_TOK
 %left LEFT_PARENTHESIS_TOK RIGHT_PARENTHESIS_TOK
 
-%type<symbolValue> lvalue funcdeclare idlist idlist_tail
+%type<symbolValue> lvalue funcdeclare idlist
 %type<callValue> methodcall normcall callsuffix
 
 %%
@@ -166,24 +181,17 @@ normcall:       LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { $$ = createCa
 methodcall:     DOUBLE_DOT_TOK ID_TOK[id] LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { $$ = createCallValue(true, $id); RULE_PRINT("methodcall <- .. ID ( elist )\n");}
                 ;
 
-elist:		    expr COMMA_TOK elist_tail   { RULE_PRINT("elist <- expr , elist_tail\n");}
+elist:		    elist COMMA_TOK expr        { RULE_PRINT("elist <- elist , expr\n");}
                 | expr                      { RULE_PRINT("elist <- expr\n");}
                 | 		                    { RULE_PRINT("elist <- \n");}
-                ;
-
-elist_tail: 	expr COMMA_TOK elist_tail   { RULE_PRINT("elist_tail <- expr , elist_tail\n");}
-                | expr 			            { RULE_PRINT("elist_tail <- \n");}
                 ;
 
 objectdef: 	    LEFT_SQUARE_TOK elist RIGHT_SQUARE_TOK 		    { RULE_PRINT("objectdef <- [ elist ]\n");}
 		        | LEFT_SQUARE_TOK indexed RIGHT_SQUARE_TOK 	    { RULE_PRINT("objectdef <- [ indexed ]\n");}
                 ;
 
-indexed:        indexedelem indexed_tail            { RULE_PRINT("indexed <- indexedelem indexed_tail\n");}
-                ;
-
-indexed_tail: 	COMMA_TOK indexedelem indexed_tail 	{ RULE_PRINT("indexed_tail <- , indexedelem indexed_tail\n");}
-                | 				                    { RULE_PRINT("indexed_tail <- \n");}
+indexed:        indexed COMMA_TOK indexedelem        { RULE_PRINT("indexed <- indexed , indexedelem\n");}
+                | indexedelem                        { RULE_PRINT("indexed <- indexedelem\n");}
                 ;
 
 indexedelem:    LEFT_BRACKET_TOK expr COLON_TOK expr RIGHT_BRACKET_TOK  { RULE_PRINT("indexedelem <- { expr : expr }\n");}
@@ -220,13 +228,10 @@ const:  	    INTEGER_TOK 	    { RULE_PRINT("const <- INTEGER\n");}
                 | FALSE_TOK		    { RULE_PRINT("const <- FALSE\n");}
                 ;
 
-idlist[list]:           ID_TOK[id] idlist_tail[tail]            { HANDLE_IDLIST(&$list, $id, $tail); RULE_PRINT("idlist <- ID idlist_tail\n");}
-                        |                                       { $list = NULL; RULE_PRINT("idlist <- \n");}
-                        ;
-
-idlist_tail[list]:      COMMA_TOK ID_TOK[id] idlist_tail[tail]  { HANDLE_IDLIST(&$list, $id, $tail); RULE_PRINT("idlist_tail <- , ID idlist_tail\n");}
-                        |                                       { $list = NULL; RULE_PRINT("idlist_tail <- \n");}
-                        ;
+idlist[list]:   idlist[tail] COMMA_TOK ID_TOK[id]   { HANDLE_IDLIST(&$list, $id, $tail); RULE_PRINT("idlist <- idlist , ID\n");}
+                | ID_TOK[id]                        { HANDLE_IDLIST(&$list, $id, NULL); RULE_PRINT("idlist <- ID\n");}
+                |                                   { $list = NULL; RULE_PRINT("idlist <- \n");}
+                ;
 
 ifstmt:         ifprefix stmt elseprefix stmt   { RULE_PRINT("ifstmt <- ifprefix stmt elsestmt\n");}
                 | ifprefix stmt                 { RULE_PRINT("ifstmt <- ifprefix stmt\n");}
@@ -270,6 +275,7 @@ int main(int argc, char** argv){
         return 1;
     }
 
+    sourceFileName = argv[1];
     yyin = fopen(argv[1], "r");
 
     if(yyin == NULL){
