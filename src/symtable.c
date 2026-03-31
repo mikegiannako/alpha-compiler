@@ -4,7 +4,7 @@
 #include "../include/generic_stack.h"
 
 #include <string.h>
-#include <stdlib.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #define SCOPE_ACTIVE 1
@@ -72,12 +72,12 @@ void symbolTable_EnterScope(){
     currentSymbolTable = currentSymbolTable->next;
 }
 
-void symbolTable_ExitScope(){
+void symbolTable_ExitScope(bool clearScope){
     if(currentSymbolTable->prev == NULL){
         ERROR_MSG("SYMTABLE", "Trying to exit global scope");
     }
 
-    while(!intPtrStack_IsEmpty(currentSymbolTable->activeSymbolStack)){
+    while(clearScope && !intPtrStack_IsEmpty(currentSymbolTable->activeSymbolStack)){
         *intPtrStack_Pop(&currentSymbolTable->activeSymbolStack) = SCOPE_INACTIVE;
     }
 

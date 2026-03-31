@@ -3,6 +3,7 @@
 
 #include "../include/symtable.h"
 #include "../include/generic_stack.h"
+#include "../include/intermediate.h"
 
 extern unsigned int loopCounter;
 extern unsigned int scope;
@@ -31,8 +32,23 @@ void HANDLE_LVALUE_GLOBAL_ID(symbolTableEntry_ptr *lvalue, const char* id);
 
 //========================
 
+void HANDLE_MEMBER_LVALUE_ID(symbolTableEntry_ptr lvalue, const char* id);
+void HANDLE_MEMBER_LVALUE_EXPR(symbolTableEntry_ptr lvalue);
+
+//========================
+
+void HANDLE_CALL_LVALUE_CALLSUFFIX(symbolTableEntry_ptr lvalue, Call_ptr callsuffix);
+
+//========================
+
+
 void HANDLE_FUNCDECLARE_ID(symbolTableEntry_ptr *lvalue, const char* id);
 void HANDLE_FUNCDECLARE_ANON(symbolTableEntry_ptr *lvalue);
+void HANDLE_FUNCPARAMS();
+
+//========================
+
+void HANDLE_IDLIST(symbolTableEntry_ptr *idlist, const char* id, symbolTableEntry_ptr list_tail);
 
 #endif
 

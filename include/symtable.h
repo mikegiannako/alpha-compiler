@@ -1,6 +1,7 @@
 #ifndef _SYMTABLE_H_
 #define _SYMTABLE_H_
 
+#include <stdbool.h>
 #include "../include/generic_stack.h"
 
 typedef enum scopeSpace scopeSpace_enum;
@@ -54,7 +55,7 @@ struct symbolTable {
 symbolTable_ptr symbolTable_Init();
 void symbolTable_FreeAll();
 void symbolTable_EnterScope();
-void symbolTable_ExitScope();
+void symbolTable_ExitScope(bool clearScope);
 symbolTableEntry_ptr symbolTable_Insert(const char *name, symbolType_enum type);
 symbolTableEntry_ptr symbolTable_Lookup(const char *name);
 symbolTableEntry_ptr symbolTable_LocalLookup(const char *name);

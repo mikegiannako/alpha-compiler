@@ -1,14 +1,14 @@
 %{
     #include <stdio.h>
-	#include <unistd.h>
-	#include <stdlib.h>
 	#include <string.h>
+    #include <stdbool.h>
     #include <assert.h>
     #include "../include/lexer.h"
     #include "../include/utils.h"
     #include "../include/generic_stack.h"
 	#include "../include/symtable.h"
     #include "../include/rule_handlers.h"
+    #include "../include/intermediate.h"
 
     #ifdef DEBUG
         #define RULE_PRINT(rule) {fprintf(stderr, "LINE: %d ", yylineno); fprintf(stderr, rule);}
@@ -40,6 +40,7 @@
 	float numValue;
     unsigned int uintValue;
     struct symbolTableEntry* symbolValue;
+    struct call* callValue;
 }
 
 %token <stringValue> STRING_TOK ID_TOK
@@ -63,12 +64,14 @@
 %left LEFT_BRACKET_TOK RIGHT_BRACKET_TOK
 %left LEFT_PARENTHESIS_TOK RIGHT_PARENTHESIS_TOK
 
-%type<symbolValue> lvalue funcdeclare
+%type<symbolValue> lvalue funcdeclare idlist idlist_tail
+%type<callValue> methodcall normcall callsuffix
 
 %%
 
 
 program:        stmt_list               { RULE_PRINT("program <- stmt_list\n" );}
+                |
 		        ;
 
 stmt_list:      stmt_list stmt          { RULE_PRINT("statement list <- statement statement list\n");}
@@ -141,26 +144,26 @@ lvalue[lval]:   ID_TOK[id]                      { HANDLE_LVALUE_ID(&$lval, $id);
                 | member                        { $lval = NULL; RULE_PRINT("lvalue <- member\n");}
                 ;
 
-member:         lvalue DOT_TOK ID_TOK                                   { RULE_PRINT("member <- lvalue . ID\n");}
-                | lvalue LEFT_SQUARE_TOK expr RIGHT_SQUARE_TOK          { RULE_PRINT("member <- lvalue [ expr ] \n");}
+member:         lvalue[lval] DOT_TOK ID_TOK[id]                         { HANDLE_MEMBER_LVALUE_ID($lval, $id); RULE_PRINT("member <- lvalue . ID\n");}
+                | lvalue[lval] LEFT_SQUARE_TOK expr RIGHT_SQUARE_TOK    { HANDLE_MEMBER_LVALUE_EXPR($lval); RULE_PRINT("member <- lvalue [ expr ] \n");}
                 | call DOT_TOK ID_TOK                                   { RULE_PRINT("member <- call . ID\n");}
                 | call LEFT_SQUARE_TOK expr RIGHT_SQUARE_TOK            { RULE_PRINT("member <- call [ expr ]\n");}
                 ;
 
 call:           call LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK   { RULE_PRINT("call <- call ( elist )\n");}
-                | lvalue callsuffix                                     { RULE_PRINT("call <- lvalue callsuffix\n");}
+                | lvalue[lval] callsuffix[suffix]                       { HANDLE_CALL_LVALUE_CALLSUFFIX($lval, $suffix); RULE_PRINT("call <- lvalue callsuffix\n");}
                 | LEFT_PARENTHESIS_TOK funcdef RIGHT_PARENTHESIS_TOK LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK
                     { RULE_PRINT("call <- LEFT_PARENTHESIS_TOK funcdef RIGHT_PARENTHESIS_TOK LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK\n");}
                 ;
 
-callsuffix:     normcall 	    { RULE_PRINT("callsuffix <- normcall\n");}
-                | methodcall 	{ RULE_PRINT("callsuffix <- methodcall\n");}
+callsuffix:     normcall[call] 	    { $$ = $call; RULE_PRINT("callsuffix <- normcall\n");}
+                | methodcall[call]	{ $$ = $call; RULE_PRINT("callsuffix <- methodcall\n");}
                 ;
 
-normcall:       LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { RULE_PRINT("normcall <- ( elist )\n");}
+normcall:       LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { $$ = createCallValue(false, NULL); RULE_PRINT("normcall <- ( elist )\n");}
                 ;
 
-methodcall:     DOUBLE_DOT_TOK ID_TOK LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { RULE_PRINT("methodcall <- .. ID ( elist )\n");}
+methodcall:     DOUBLE_DOT_TOK ID_TOK[id] LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { $$ = createCallValue(true, $id); RULE_PRINT("methodcall <- .. ID ( elist )\n");}
                 ;
 
 elist:		    expr COMMA_TOK elist_tail   { RULE_PRINT("elist <- expr , elist_tail\n");}
@@ -186,18 +189,18 @@ indexed_tail: 	COMMA_TOK indexedelem indexed_tail 	{ RULE_PRINT("indexed_tail <-
 indexedelem:    LEFT_BRACKET_TOK expr COLON_TOK expr RIGHT_BRACKET_TOK  { RULE_PRINT("indexedelem <- { expr : expr }\n");}
                 ;
 
-block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_list { scope--;  symbolTable_ExitScope(); } RIGHT_BRACKET_TOK    { RULE_PRINT("block <- { stmt_list }\n"); }
+block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_list { scope--;  symbolTable_ExitScope(true); } RIGHT_BRACKET_TOK    { RULE_PRINT("block <- { stmt_list }\n"); }
                 | LEFT_BRACKET_TOK RIGHT_BRACKET_TOK            { RULE_PRINT("block <- { }\n"); }
                 ;
 
-funcdef:        funcdeclare funcparams funcbody { RULE_PRINT("funcdef <- FUNCTION (ID) ( idlist ) block\n"); } 
+funcdef:        funcdeclare funcparams funcbody { RULE_PRINT("funcdef <- FUNCTION ID ( idlist ) block\n"); } 
                 ;
 
 funcdeclare[funcdecl]:  FUNCTION_TOK ID_TOK[id]         { HANDLE_FUNCDECLARE_ID(&$funcdecl, $id); RULE_PRINT("funcdeclare <- FUNCTION ID\n"); }
                         | FUNCTION_TOK                  { HANDLE_FUNCDECLARE_ANON(&$funcdecl); RULE_PRINT("funcdeclare <- FUNCTION\n"); }
                         ;
 
-funcparams:     LEFT_PARENTHESIS_TOK {scope++;} idlist {scope--;} RIGHT_PARENTHESIS_TOK { RULE_PRINT("funcparams <- ( idlist )\n"); }
+funcparams:     LEFT_PARENTHESIS_TOK  { scope++; symbolTable_EnterScope(); } idlist { scope--;  symbolTable_ExitScope(false); } RIGHT_PARENTHESIS_TOK { RULE_PRINT("funcparams <- ( idlist )\n"); }
                 ;
 
 funcblockstart: { uintStack_Push(&loopCounterStack, loopCounter); loopCounter = 0; uintStack_Push(&functionScopeStack, scope); }
@@ -217,13 +220,13 @@ const:  	    INTEGER_TOK 	    { RULE_PRINT("const <- INTEGER\n");}
                 | FALSE_TOK		    { RULE_PRINT("const <- FALSE\n");}
                 ;
 
-idlist: 	    ID_TOK idlist_tail  { RULE_PRINT("idlist <- ID idlist_tail\n");}
-                |                   { RULE_PRINT("idlist <- \n");}
-                ;
+idlist[list]:           ID_TOK[id] idlist_tail[tail]            { HANDLE_IDLIST(&$list, $id, $tail); RULE_PRINT("idlist <- ID idlist_tail\n");}
+                        |                                       { $list = NULL; RULE_PRINT("idlist <- \n");}
+                        ;
 
-idlist_tail: 	COMMA_TOK ID_TOK idlist_tail    { RULE_PRINT("idlist_tail <- , ID idlist_tail\n");}
-                |                               { RULE_PRINT("idlist_tail <- \n");}
-                ;
+idlist_tail[list]:      COMMA_TOK ID_TOK[id] idlist_tail[tail]  { HANDLE_IDLIST(&$list, $id, $tail); RULE_PRINT("idlist_tail <- , ID idlist_tail\n");}
+                        |                                       { $list = NULL; RULE_PRINT("idlist_tail <- \n");}
+                        ;
 
 ifstmt:         ifprefix stmt elseprefix stmt   { RULE_PRINT("ifstmt <- ifprefix stmt elsestmt\n");}
                 | ifprefix stmt                 { RULE_PRINT("ifstmt <- ifprefix stmt\n");}
