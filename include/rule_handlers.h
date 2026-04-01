@@ -26,6 +26,10 @@ void HANDLE_TERM_LVAL_DEC(symbolTableEntry_ptr lvalue);
 
 //========================
 
+void HANDLE_ASSIGNEXPR(symbolTableEntry_ptr lvalue);
+
+//========================
+
 void HANDLE_LVALUE_ID(symbolTableEntry_ptr *lvalue, const char* id);
 void HANDLE_LVALUE_LOCAL_ID(symbolTableEntry_ptr *lvalue, const char* id);
 void HANDLE_LVALUE_GLOBAL_ID(symbolTableEntry_ptr *lvalue, const char* id);

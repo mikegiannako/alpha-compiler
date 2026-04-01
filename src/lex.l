@@ -14,7 +14,13 @@
     unsigned int stringStartLine;
     uintStack_ptr lineStack = NULL;
 
+    int yycolumn = 1;
+
     char getEscapeChar(char c);
+
+#define YY_USER_ACTION \
+    yycolumn += yyleng; \
+    if (yytext[0] == '\n') yycolumn = 1;
 %}
 
 %option yylineno
@@ -172,14 +178,13 @@ IGNORE         [ \t\n\r]
 {IGNORE} {}
 
 . {
-    ERROR_MSG("LEXER", "Unexpected character '%c' at line %d", yytext[0], yylineno);
+    USER_ERROR("LEXER", "Unexpected character '%c'", yytext[0]);
 }
 
 %%
 
 void yyerror(const char *s) {
-    fprintf(stderr, "Error: %s at line %d\n", s, yylineno);
-    exit(EXIT_FAILURE);
+    USER_ERROR("SYNTAX", "%s", s);
 }
 
 char getEscapeChar(char c){

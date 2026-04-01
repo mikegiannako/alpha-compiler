@@ -143,8 +143,8 @@ term:           LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK   { RULE_PRINT("
                 | primary                               { RULE_PRINT("term <- primary\n");}
                 ;       
 
-assign_expr:    lvalue ASSIGN_TOK expr      { RULE_PRINT("assign_expr <- lvalue ASSIGN expression\n");}
-                ;
+assign_expr[assign]:    lvalue[lval] ASSIGN_TOK expr      { HANDLE_ASSIGNEXPR($lval); RULE_PRINT("assign_expr <- lvalue ASSIGN expression\n"); }
+                        ;
 
 primary:        lvalue         { RULE_PRINT("primary <- lvalue\n");}
                 | call         { RULE_PRINT("primary <- call\n");}
@@ -198,7 +198,7 @@ indexedelem:    LEFT_BRACKET_TOK expr COLON_TOK expr RIGHT_BRACKET_TOK  { RULE_P
                 ;
 
 block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_list { scope--;  symbolTable_ExitScope(true); } RIGHT_BRACKET_TOK    { RULE_PRINT("block <- { stmt_list }\n"); }
-                | LEFT_BRACKET_TOK RIGHT_BRACKET_TOK            { RULE_PRINT("block <- { }\n"); }
+                | LEFT_BRACKET_TOK RIGHT_BRACKET_TOK    { symbolTable_EnterScope(); symbolTable_ExitScope(true); RULE_PRINT("block <- { }\n"); }
                 ;
 
 funcdef:        funcdeclare funcparams funcbody { RULE_PRINT("funcdef <- FUNCTION ID ( idlist ) block\n"); } 

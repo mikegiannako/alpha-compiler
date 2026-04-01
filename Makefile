@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -g -fsanitize=address
-BFLAGS = --yacc --defines
+BFLAGS = --defines
 DEBUG = -DDEBUG
 
 SRCS = \

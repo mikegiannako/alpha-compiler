@@ -4,6 +4,7 @@
 #define RED_TEXT "\033[31m"
 #define GREEN_TEXT "\033[32m"
 #define ORANGE_TEXT "\033[33m"
+#define BLUE_TEXT "\033[34m"
 
 #define RESET_TEXT "\033[0m"
 
@@ -38,21 +39,24 @@
 // USER-FACING ERROR MACROS
 // To be used for compilation errors in Alpha source code (no compiler internals exposed)
 
-// Error without line number (general compilation error)
+extern const char* sourceFileName;
+extern int yylineno;
+extern int yycolumn;
+extern int yyleng;
+
 #define USER_ERROR(error_type, format, ...) \
     do { \
         fprintf(stderr, RED_TEXT "[%s ERROR]" RESET_TEXT " - ", error_type); \
         fprintf(stderr, format, ##__VA_ARGS__); \
-        fprintf(stderr, "\n"); \
+        fprintf(stderr, BLUE_TEXT " | %s:%d:%d" RESET_TEXT "\n", sourceFileName, yylineno, yycolumn - yyleng); \
         exit(EXIT_FAILURE); \
     } while (0)
 
-// Warning without line number
 #define USER_WARNING(warning_type, format, ...) \
     do { \
         fprintf(stderr, ORANGE_TEXT "[%s WARNING]" RESET_TEXT " - ", warning_type); \
         fprintf(stderr, format, ##__VA_ARGS__); \
-        fprintf(stderr, "\n"); \
+        fprintf(stderr, BLUE_TEXT " | %s:%d:%d" RESET_TEXT "\n", sourceFileName, yylineno, yycolumn - yyleng); \
     } while (0)
 
 #endif // _ERRORS_H_

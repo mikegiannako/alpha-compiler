@@ -56,6 +56,18 @@ void HANDLE_TERM_LVAL_DEC(symbolTableEntry_ptr lvalue){
     check_arithop_lvalue_eligibility(lvalue, "decrement");
 }
 
+//========================
+
+void HANDLE_ASSIGNEXPR(symbolTableEntry_ptr lvalue){
+    if(!lvalue) return;
+
+    if(lvalue->type == LIBFUNC_SYMTYPE){
+        USER_WARNING("SYNTAX", "Attempted to assign value to Library Function '%s'", lvalue->name);
+    } else if(lvalue->type == USERFUNC_SYMTYPE){
+        USER_WARNING("SYNTAX", "Attempted to assign value to User Function '%s'", lvalue->name);
+    }
+}
+
 
 //========================
 
@@ -70,11 +82,10 @@ void HANDLE_LVALUE_ID(symbolTableEntry_ptr *lvalue, const char* id){
     if(entry->scope != 0 && !uintStack_IsEmpty(functionScopeStack)){
         unsigned int func_scope = uintStack_Top(functionScopeStack);
         if(entry->scope <= func_scope){
-            USER_WARNING("SYNTAX", "Symbol `%s` (scope %d) cannot be reached within last open function's block (scope %d)", id, entry->scope, func_scope);
+            USER_WARNING("SYNTAX", "Symbol `%s` (scope %d) is unreachable as there is at least one active User Function between it and the point of reference (last open function is at scope %d) ", id, entry->scope, func_scope);
         }
     }
-    
-    
+
     *lvalue = entry;
 }
 
@@ -149,7 +160,7 @@ void HANDLE_FUNCDECLARE_ID(symbolTableEntry_ptr *lvalue, const char* id){
 
     if(entry->type == USERFUNC_SYMTYPE && entry->scope == scope){
         USER_WARNING("SYNTAX", "User Function `%s` has already been declared in the same scope", id);
-    } else if((entry->type == LOCALVAR_SYMTYPE || entry->type == GLOBALVAR_SYMTYPE) && entry->scope == scope){
+    } else if((entry->type == LOCALVAR_SYMTYPE || entry->type == GLOBALVAR_SYMTYPE || entry->type == FORMALVAR_SYMTYPE) && entry->scope == scope){
         USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a User Function (already exists as Variable in the same scope)", id);
     } else if(entry->type == LIBFUNC_SYMTYPE){
         USER_WARNING("SYNTAX", "User Function '%s' declaration attempting to overshadow Library Function", id);
@@ -181,6 +192,8 @@ void HANDLE_IDLIST(symbolTableEntry_ptr *idlist, const char* id, symbolTableEntr
         } else if(entry->type == LIBFUNC_SYMTYPE){
             USER_WARNING("SYNTAX", "Formal Argument '%s' declaration attempting to overshadow Library Function", id);
             return;
+        } else if(entry->type == FORMALVAR_SYMTYPE && entry->scope == scope){
+            USER_WARNING("SYNTAX", "Attempted to redeclare Formal Argument '%s' (already exists in the same function declaration)", id);
         }
     }
 
