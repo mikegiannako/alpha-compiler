@@ -215,20 +215,20 @@ static const char* symbolType_ToString(symbolType_enum type){
     }
 }
 
-static const char* scopeSpace_ToString(scopeSpace_enum space){
-    switch(space){
-        case PROGRAMVAR: return "PROGRAMVAR";
-        case FUNCTIONLOCAL: return "FUNCTIONLOCAL";
-        case FORMALARG: return "FORMALARG";
-        default: return "UNKNOWN";
-    }
-}
+// static const char* scopeSpace_ToString(scopeSpace_enum space){
+//     switch(space){
+//         case PROGRAMVAR: return "PROGRAMVAR";
+//         case FUNCTIONLOCAL: return "FUNCTIONLOCAL";
+//         case FORMALARG: return "FORMALARG";
+//         default: return "UNKNOWN";
+//     }
+// }
 
 void symbolTable_Print(){
     printf("\n");
-    printf("====================================================================================================================\n");
-    printf("                                                     SYMBOL TABLE                                                            \n");
-    printf("====================================================================================================================\n\n");
+    printf("===========================================\n");
+    printf("                SYMBOL TABLE\n");
+    printf("===========================================\n\n");
 
     symbolTable_ptr currentScope = globalSymbolTable;
     unsigned int scopeNum = 0;
@@ -239,9 +239,11 @@ void symbolTable_Print(){
             break;
         }
 
-        printf("\033[33m                                             ----- Scope %u ", scopeNum);
         if(scopeNum == 0){
+            printf("\033[33m        ----- Scope %u ", scopeNum);
             printf("(Global) ");
+        } else {
+            printf("\033[33m            ----- Scope %u ", scopeNum);
         }
         printf("-----\033[0m\n\n");
 
@@ -252,9 +254,9 @@ void symbolTable_Print(){
             continue;
         }
 
-        printf("%-20s %-15s %-6s %-16s %-8s %s\n",
-               "Name", "Type", "Line", "Space", "Offset", "Function Info");
-        printf("--------------------------------------------------------------------------------------------------------------------\n");
+        printf("%-20s %-15s %s\n",
+               "Name", "Type", "Line");
+        printf("-------------------------------------------\n");
 
         for(unsigned int i = 0; i < tableSizes[currentScope->capacityIndex]; i++){
             symbolTableEntry_ptr entry = currentScope->buckets[i];
@@ -271,18 +273,18 @@ void symbolTable_Print(){
                            symbolType_ToString(entry->type),
                            entry->line);
 
-                    if(entry->type == USERFUNC_SYMTYPE){
-                        printf("%-16s %-8s ", "-", "-");
-                        printf("addr:%-4u locals:%-2u formals:%-2u",
-                               entry->iaddress,
-                               entry->totalLocals,
-                               entry->totalFormals);
-                    } else {
-                        printf("%-16s %-8u ",
-                               scopeSpace_ToString(entry->space),
-                               entry->offset);
-                        printf("-");
-                    }
+                    // if(entry->type == USERFUNC_SYMTYPE){
+                    //     printf("%-16s %-8s ", "-", "-");
+                    //     printf("addr:%-4u locals:%-2u formals:%-2u",
+                    //            entry->iaddress,
+                    //            entry->totalLocals,
+                    //            entry->totalFormals);
+                    // } else {
+                    //     printf("%-16s %-8u ",
+                    //            scopeSpace_ToString(entry->space),
+                    //            entry->offset);
+                    //     printf("-");
+                    // }
 
                     printf("\n");
                 }
@@ -296,5 +298,5 @@ void symbolTable_Print(){
         scopeNum++;
     }
 
-    printf("====================================================================================================================\n\n");
+    printf("===========================================\n\n");
 }

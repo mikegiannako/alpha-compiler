@@ -83,6 +83,7 @@ void HANDLE_LVALUE_ID(symbolTableEntry_ptr *lvalue, const char* id){
         unsigned int func_scope = uintStack_Top(functionScopeStack);
         if(entry->scope <= func_scope){
             USER_WARNING("SYNTAX", "Symbol `%s` (scope %d) is unreachable as there is at least one active User Function between it and the point of reference (last open function is at scope %d) ", id, entry->scope, func_scope);
+            return;
         }
     }
 
@@ -160,13 +161,17 @@ void HANDLE_FUNCDECLARE_ID(symbolTableEntry_ptr *lvalue, const char* id){
 
     if(entry->type == USERFUNC_SYMTYPE && entry->scope == scope){
         USER_WARNING("SYNTAX", "User Function `%s` has already been declared in the same scope", id);
+        return;
     } else if((entry->type == LOCALVAR_SYMTYPE || entry->type == GLOBALVAR_SYMTYPE || entry->type == FORMALVAR_SYMTYPE) && entry->scope == scope){
         USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a User Function (already exists as Variable in the same scope)", id);
+        return;
     } else if(entry->type == LIBFUNC_SYMTYPE){
         USER_WARNING("SYNTAX", "User Function '%s' declaration attempting to overshadow Library Function", id);
+        return;
     }
 
-    *lvalue = symbolTable_Insert(id, USERFUNC_SYMTYPE);
+    *lvalue = symbolTable_Insert(id, USERFUNC_SYMTYPE); 
+    
 }
 
 void HANDLE_FUNCDECLARE_ANON(symbolTableEntry_ptr *lvalue){
@@ -186,14 +191,15 @@ void HANDLE_IDLIST(symbolTableEntry_ptr *idlist, const char* id, symbolTableEntr
     symbolTableEntry_ptr entry = symbolTable_Lookup(id);
 
     if(entry){
-        if(entry->type == USERFUNC_SYMTYPE){
+        /* if(entry->type == USERFUNC_SYMTYPE){
             USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a Formal Argument (already exists as active User Function in scope %d)", id, entry->scope);
             return;
-        } else if(entry->type == LIBFUNC_SYMTYPE){
+        } else */if(entry->type == LIBFUNC_SYMTYPE){
             USER_WARNING("SYNTAX", "Formal Argument '%s' declaration attempting to overshadow Library Function", id);
             return;
         } else if(entry->type == FORMALVAR_SYMTYPE && entry->scope == scope){
             USER_WARNING("SYNTAX", "Attempted to redeclare Formal Argument '%s' (already exists in the same function declaration)", id);
+            return;
         }
     }
 
