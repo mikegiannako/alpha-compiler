@@ -4,8 +4,8 @@
 
 #define INITIAL_BUFFER_CAPACITY 32
 
-strBuffer_ptr strBuffer_Init(){
-    strBuffer_ptr buf = safeCalloc(1, sizeof(struct strBuffer), "allocating memory for strBuffer");
+StrBuffer_ptr strBuffer_Init(){
+    StrBuffer_ptr buf = safeCalloc(1, sizeof(struct StrBuffer), "allocating memory for strBuffer");
 
     buf->data = safeCalloc(INITIAL_BUFFER_CAPACITY, sizeof(char), "initializing string buffer data");
     buf->length = 0;
@@ -14,7 +14,7 @@ strBuffer_ptr strBuffer_Init(){
     return buf;
 }
 
-void strBuffer_AppendChar(strBuffer_ptr buf, char c){
+void strBuffer_AppendChar(StrBuffer_ptr buf, char c){
     if (buf->length >= buf->capacity) {
         buf->capacity = buf->capacity * 2;
         buf->data = safeRealloc(buf->data, buf->capacity, "resizing string buffer data");
@@ -23,7 +23,7 @@ void strBuffer_AppendChar(strBuffer_ptr buf, char c){
     buf->data[buf->length++] = c;    
 }
 
-char* strBuffer_FinalizeString(strBuffer_ptr buf){
+char* strBuffer_FinalizeString(StrBuffer_ptr buf){
     if (buf->length == 0) {
         safeFree(&buf->data, "freeing empty (not NULL) string buffer data");
     }
@@ -35,7 +35,7 @@ char* strBuffer_FinalizeString(strBuffer_ptr buf){
     return buf->data;
 }
 
-void strBuffer_Free(strBuffer_ptr buf){
+void strBuffer_Free(StrBuffer_ptr buf){
     if (!buf) return; // Avoid freeing NULL
 
     safeFree(&buf->data, "freeing string buffer data");

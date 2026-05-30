@@ -7,5 +7,5 @@
 #include "../include/memory_operations.h"
 #include "../include/error_macros.h"
 
-IMPLEMENT_STACK(unsigned int, uintStack)
-IMPLEMENT_STACK(int*, intPtrStack)
+IMPLEMENT_STACK(unsigned int, UIntStack, uintStack)
+IMPLEMENT_STACK(int*, IntPtrStack, intPtrStack)

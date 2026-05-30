@@ -16,7 +16,7 @@
     do { \
         fprintf(stderr, RED_TEXT "[%s ERROR]" RESET_TEXT " - ", error_type); \
         fprintf(stderr, format, ##__VA_ARGS__); \
-        fprintf(stderr, " - (%s @ %d)\n", filename, line); \
+        fprintf(stderr, " - (%s:%d)\n", filename, line); \
         exit(EXIT_FAILURE); \
     } while (0)
 
@@ -24,7 +24,7 @@
     do { \
         fprintf(stderr, ORANGE_TEXT "[%s WARNING]" RESET_TEXT " - ", warning_type); \
         fprintf(stderr, format, ##__VA_ARGS__); \
-        fprintf(stderr, " - (%s @ %d)\n", filename, line); \
+        fprintf(stderr, " - (%s:%d)\n", filename, line); \
     } while (0)
 
 // Public macros that automatically include compiler source file and line information

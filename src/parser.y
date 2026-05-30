@@ -9,12 +9,16 @@
 	#include "../include/symtable.h"
     #include "../include/rule_handlers.h"
     #include "../include/intermediate.h"
+    #include "../include/intermediate_rule_types.h"
+    #include "../include/quad.h"
 
     #ifdef DEBUG
         #define RULE_PRINT(rule) {fprintf(stderr, "LINE: %d ", yylineno); fprintf(stderr, rule);}
     #else
         #define RULE_PRINT(rule) {}
     #endif
+
+    #define EMPTY_IDLIST 0U
 
 	// #define YY_DECL int alpha_yylex (void* ylval)
     
@@ -25,10 +29,11 @@
     extern FILE* yyin;
     extern FILE* yyout;
 
-    uintStack_ptr functionScopeStack = NULL;
-    uintStack_ptr loopCounterStack = NULL;
-    uintStack_ptr funcstartJumpStack = NULL;
-    uintStack_ptr tempVarCountStack = NULL;
+    UIntStack_ptr functionScopeStack = NULL;
+    UIntStack_ptr loopCounterStack = NULL;
+    UIntStack_ptr funcstartJumpStack = NULL;
+    UIntStack_ptr tempVarCountStack = NULL;
+    UIntStack_ptr scopeOffsetStack = NULL;
     unsigned int loopCounter = 0;
     unsigned int scope = 0;
     const char* sourceFileName = "unknown";
@@ -39,12 +44,18 @@
 %define parse.error verbose
 %define parse.lac full
 
+%expect 1
+
 %union{
 	const char* stringValue;
 	float numValue;
     unsigned int uintValue;
-    struct symbolTableEntry* symbolValue;
-    struct call* callValue;
+    struct SymbolTableEntry* symbolValue;
+    struct Call* callValue;
+    struct Expr* exprValue;
+    struct Stmt* stmtValue;
+    struct ForLoopPrefix* forLoopPrefixValue;
+
 }
 
 %token <stringValue> STRING_TOK "string" ID_TOK "identifier"
@@ -79,137 +90,142 @@
 %left LEFT_BRACKET_TOK RIGHT_BRACKET_TOK
 %left LEFT_PARENTHESIS_TOK RIGHT_PARENTHESIS_TOK
 
-%type<symbolValue> lvalue funcdeclare idlist
+%type<symbolValue> funcdeclare funcname funcdef
 %type<callValue> methodcall normcall callsuffix
+%type<uintValue> funcbody ifprefix elseprefix whilestart whileexpr funcparams idlist M N
+%type<stmtValue> block stmt stmt_list ifstmt whilestmt forstmt returnstmt loopstmt break continue program 
+%type<exprValue> const expr elist term assign_expr primary call objectdef lvalue member indexed indexedelem
+%type<forLoopPrefixValue> forprefix
 
 %%
 
 
-program:        stmt_list               { RULE_PRINT("program <- stmt_list\n" );}
-                |
+program:        stmt_list               { $$ = $1;      RULE_PRINT("program <- stmt_list\n" );}
+                |                       { $$ = NULL;    RULE_PRINT("program <- \n" );}
 		        ;
 
-stmt_list:      stmt_list stmt          { RULE_PRINT("statement list <- statement statement list\n");}
-                | stmt 		            { RULE_PRINT("statement list <- statement\n");}
+stmt_list:      stmt_list { resetTempVarCounter(); } stmt { HANDLE_STMTLIST(&$$, $1, $3); RULE_PRINT("statement list <- statement statement list\n");}
+                | stmt 		            { $$ = $1; RULE_PRINT("statement list <- statement\n");}
                 ;   
 
-break:          BREAK_TOK SEMICOLON_TOK         { HANDLE_BREAK(); RULE_PRINT("break <- BREAK ;\n");}
+break:          BREAK_TOK SEMICOLON_TOK         { HANDLE_BREAK(&$$); RULE_PRINT("break <- BREAK ;\n");}
                 ;   
 
-continue:       CONTINUE_TOK SEMICOLON_TOK      { HANDLE_CONTINUE(); RULE_PRINT("continue <- CONTINUE ;\n");}
+continue:       CONTINUE_TOK SEMICOLON_TOK      { HANDLE_CONTINUE(&$$); RULE_PRINT("continue <- CONTINUE ;\n");}
                 ;   
 
-returnstmt:     RETURN_TOK expr SEMICOLON_TOK   { HANDLE_RETURN(); RULE_PRINT("returnstmt <- RETURN expression ;\n");}
-                | RETURN_TOK SEMICOLON_TOK      { HANDLE_RETURN(); RULE_PRINT("returnstmt <- RETURN ;\n");}
+returnstmt:     RETURN_TOK expr SEMICOLON_TOK   { HANDLE_RETURN(&$$, $2); RULE_PRINT("returnstmt <- RETURN expression ;\n");}
+                | RETURN_TOK SEMICOLON_TOK      { HANDLE_RETURN(&$$, NULL); RULE_PRINT("returnstmt <- RETURN ;\n");}
                 ;   
 
-stmt:           expr SEMICOLON_TOK      { RULE_PRINT("statement <- expression ;\n");}
-                | ifstmt 		        { RULE_PRINT("statement <- if\n");}
-                | whilestmt 		    { RULE_PRINT("statement <- while\n");}
-                | forstmt 		        { RULE_PRINT("statement <- for\n");}
-                | returnstmt            { RULE_PRINT("statement <- return\n");}
-                | break                 { RULE_PRINT("statement <- break ;\n");}
-                | continue              { RULE_PRINT("statement <- continue ;\n");}
-                | block 		        { RULE_PRINT("statement <- block\n");}
-                | funcdef 		        { RULE_PRINT("statement <- function definition\n");}
-                | SEMICOLON_TOK 	    { RULE_PRINT("statement <- ;\n");}
-                | SINGLE_COMMENT_TOK    { RULE_PRINT("statement <- SINGLE_COMMENT\n");}
+stmt:           expr SEMICOLON_TOK      { emitIfShortCircuitStmt(&$1); HANDLE_STMT_GENERIC(&$$); RULE_PRINT("statement <- expression ;\n");}
+                | ifstmt 		        { $$ = $1; RULE_PRINT("statement <- if\n");}
+                | whilestmt 		    { $$ = $1; RULE_PRINT("statement <- while\n");}
+                | forstmt 		        { $$ = $1; RULE_PRINT("statement <- for\n");}
+                | returnstmt            { $$ = $1; RULE_PRINT("statement <- return\n");}
+                | break                 { $$ = $1; RULE_PRINT("statement <- break ;\n");}
+                | continue              { $$ = $1; RULE_PRINT("statement <- continue ;\n");}
+                | block 		        { $$ = $1; RULE_PRINT("statement <- block\n");}
+                | funcdef 		        { HANDLE_STMT_GENERIC(&$$); RULE_PRINT("statement <- function definition\n");}
+                | SEMICOLON_TOK 	    { HANDLE_STMT_GENERIC(&$$); RULE_PRINT("statement <- ;\n");}
+                | SINGLE_COMMENT_TOK    { HANDLE_STMT_GENERIC(&$$); RULE_PRINT("statement <- SINGLE_COMMENT\n");}
                 ;
 
-expr:           assign_expr			            { RULE_PRINT("expression <- assign_expr\n");}
-		        | expr ADD_TOK expr 		    { RULE_PRINT("expression <- expression + expression\n");}
-                | expr MINUS_TOK expr 		    { RULE_PRINT("expression <- expression - expression\n");}
-                | expr MUL_TOK expr			    { RULE_PRINT("expression <- expression * expression\n");}
-                | expr DIV_TOK expr			    { RULE_PRINT("expression <- expression / expression\n");}
-                | expr MOD_TOK expr			    { RULE_PRINT("expression <- expression %% expression\n");}
-                | expr GREATER_TOK expr		    { RULE_PRINT("expression <- expression > expression\n");}
-                | expr GREATER_EQUAL_TOK expr	{ RULE_PRINT("expression <- expression >= expression\n");}
-                | expr LESS_TOK expr 		    { RULE_PRINT("expression <- expression < expression\n");}
-                | expr LESS_EQUAL_TOK expr		{ RULE_PRINT("expression <- expression <= expression\n");}
-                | expr EQUAL_TOK expr           { RULE_PRINT("expression <- expression == expression\n");}
-                | expr NOT_EQUAL_TOK expr       { RULE_PRINT("expression <- expression != expression\n");}
-                | expr AND_TOK expr             { RULE_PRINT("expression <- expression AND expression\n");}
-                | expr OR_TOK expr              { RULE_PRINT("expression <- expression OR expression\n");}
-                | term				            { RULE_PRINT("expression <- term\n");}
+expr:           assign_expr			                        { $$ = $1; RULE_PRINT("expression <- assign_expr\n");}
+		        | expr[expr1] ADD_TOK expr[expr2] 		    { RULE_EXPR_ARITHOP(&$$, $expr1, $expr2, ADD_TOK);          RULE_PRINT("expression <- expression + expression\n"); }
+                | expr[expr1] MINUS_TOK expr[expr2] 		{ RULE_EXPR_ARITHOP(&$$, $expr1, $expr2, MINUS_TOK);        RULE_PRINT("expression <- expression - expression\n"); }
+                | expr[expr1] MUL_TOK expr[expr2]			{ RULE_EXPR_ARITHOP(&$$, $expr1, $expr2, MUL_TOK);          RULE_PRINT("expression <- expression * expression\n"); }
+                | expr[expr1] DIV_TOK expr[expr2]			{ RULE_EXPR_ARITHOP(&$$, $expr1, $expr2, DIV_TOK);          RULE_PRINT("expression <- expression / expression\n"); }
+                | expr[expr1] MOD_TOK expr[expr2]			{ RULE_EXPR_ARITHOP(&$$, $expr1, $expr2, MOD_TOK);          RULE_PRINT("expression <- expression %% expression\n");}
+                | expr[expr1] GREATER_TOK expr[expr2]		{ RULE_EXPR_RELOP(&$$, $expr1, $expr2, GREATER_TOK);        RULE_PRINT("expression <- expression > expression\n");}
+                | expr[expr1] GREATER_EQUAL_TOK expr[expr2]	{ RULE_EXPR_RELOP(&$$, $expr1, $expr2, GREATER_EQUAL_TOK);  RULE_PRINT("expression <- expression >= expression\n");}
+                | expr[expr1] LESS_TOK expr[expr2] 		    { RULE_EXPR_RELOP(&$$, $expr1, $expr2, LESS_TOK);           RULE_PRINT("expression <- expression < expression\n");}
+                | expr[expr1] LESS_EQUAL_TOK expr[expr2]	{ RULE_EXPR_RELOP(&$$, $expr1, $expr2, LESS_EQUAL_TOK);     RULE_PRINT("expression <- expression <= expression\n");}
+                | expr[expr1] EQUAL_TOK { emitIfShortCircuitStmt(&$expr1);}      expr[expr2] { emitIfShortCircuitStmt(&$expr2); RULE_EXPR_RELOP(&$$, $expr1, $expr2, EQUAL_TOK);          RULE_PRINT("expression <- expression == expression\n");}
+                | expr[expr1] NOT_EQUAL_TOK  { emitIfShortCircuitStmt(&$expr1);} expr[expr2] { emitIfShortCircuitStmt(&$expr2); RULE_EXPR_RELOP(&$$, $expr1, $expr2, NOT_EQUAL_TOK);      RULE_PRINT("expression <- expression != expression\n");}
+                | expr[expr1] AND_TOK   { emitIfNotBool(&$expr1); }  M[marker]   expr[expr2] { emitIfNotBool(&$expr2); RULE_EXPR_AND(&$$, $expr1, $marker, $expr2);  RULE_PRINT("expression <- expression AND expression\n");}
+                | expr[expr1] OR_TOK    { emitIfNotBool(&$expr1); }  M[marker]   expr[expr2] { emitIfNotBool(&$expr2); RULE_EXPR_OR (&$$, $expr1, $marker, $expr2);  RULE_PRINT("expression <- expression OR expression\n");}
+                | term				                        { $$ = $1; RULE_PRINT("expression <- term\n");}
                 ;
 
-term:           LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK   { RULE_PRINT("term <- ( expression )\n");}
-                | MINUS_TOK expr %prec UMINUS_TOK		{ RULE_PRINT("term <- - expression\n");}
-                | NOT_TOK expr                          { RULE_PRINT("term <- NOT expression\n");}
-                | INCREMENT_TOK lvalue[lval]            { HANDLE_TERM_INC_LVAL($lval); RULE_PRINT("term <- ++ lvalue\n");}
-                | lvalue[lval]  INCREMENT_TOK           { HANDLE_TERM_LVAL_INC($lval); RULE_PRINT("term <- lvalue ++\n");}
-                | DECREMENT_TOK lvalue[lval]            { HANDLE_TERM_DEC_LVAL($lval); RULE_PRINT("term <- -- lvalue\n");}
-                | lvalue[lval]  DECREMENT_TOK           { HANDLE_TERM_LVAL_DEC($lval); RULE_PRINT("term <- lvalue --\n");}
-                | primary                               { RULE_PRINT("term <- primary\n");}
+term:           LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK { $$ = $2; RULE_PRINT("term <- ( expression )\n");}
+                | MINUS_TOK expr[expr1] %prec UMINUS_TOK        { HANDLE_TERM_UMINUS_EXPR(&$$, $expr1); RULE_PRINT("term <- - expression\n");}
+                | NOT_TOK expr[expr1]                           { HANDLE_TERM_NOT_EXPR(&$$, $expr1);    RULE_PRINT("term <- NOT expression\n");}
+                | INCREMENT_TOK lvalue[lval]                    { HANDLE_TERM_INC_LVAL(&$term, $lval);  RULE_PRINT("term <- ++ lvalue\n");}
+                | lvalue[lval]  INCREMENT_TOK                   { HANDLE_TERM_LVAL_INC(&$term, $lval);  RULE_PRINT("term <- lvalue ++\n");}
+                | DECREMENT_TOK lvalue[lval]                    { HANDLE_TERM_DEC_LVAL(&$term, $lval);  RULE_PRINT("term <- -- lvalue\n");}
+                | lvalue[lval]  DECREMENT_TOK                   { HANDLE_TERM_LVAL_DEC(&$term, $lval);  RULE_PRINT("term <- lvalue --\n");}
+                | primary                                       { $$ = $1;                              RULE_PRINT("term <- primary\n");}
                 ;       
 
-assign_expr[assign]:    lvalue[lval] ASSIGN_TOK expr      { HANDLE_ASSIGNEXPR($lval); RULE_PRINT("assign_expr <- lvalue ASSIGN expression\n"); }
+assign_expr[assign]:    lvalue[lval] ASSIGN_TOK expr[expr1]      { HANDLE_ASSIGNEXPR(&$assign, $lval, $expr1); RULE_PRINT("assign_expr <- lvalue ASSIGN expression\n"); }
                         ;
 
-primary:        lvalue         { RULE_PRINT("primary <- lvalue\n");}
-                | call         { RULE_PRINT("primary <- call\n");}
-                | objectdef    { RULE_PRINT("primary <- object definition\n");}
-                | LEFT_PARENTHESIS_TOK funcdef RIGHT_PARENTHESIS_TOK    { RULE_PRINT("primary <- ( function definition )\n");}
-                | const        { RULE_PRINT("primary <- const\n");}
+primary[prim]:  lvalue[lval]                                                { $prim = emitIfTableItem($lval); RULE_PRINT("primary <- lvalue\n");}
+                | call                                                      { $prim = $1; RULE_PRINT("primary <- call\n");}
+                | objectdef                                                 { $prim = $1; RULE_PRINT("primary <- object definition\n");}
+                | LEFT_PARENTHESIS_TOK funcdef[func] RIGHT_PARENTHESIS_TOK  { HANDLE_PRIMARY_FUNCDEF(&$prim, $func); RULE_PRINT("primary <- ( function definition )\n");}
+                | const                                                     { $prim = $1; RULE_PRINT("primary <- const\n");}
                 ;
 
 lvalue[lval]:   ID_TOK[id]                      { HANDLE_LVALUE_ID(&$lval, $id); RULE_PRINT("lvalue <- ID\n");}
                 | LOCAL_TOK ID_TOK[id]          { HANDLE_LVALUE_LOCAL_ID(&$lval, $id); RULE_PRINT("lvalue <- LOCAL ID\n");}
                 | DOUBLE_COLON_TOK ID_TOK[id]   { HANDLE_LVALUE_GLOBAL_ID(&$lval, $id); RULE_PRINT("lvalue <- :: ID\n");}
-                | member                        { $lval = NULL; RULE_PRINT("lvalue <- member\n");}
+                | member                        { $lval = $1; RULE_PRINT("lvalue <- member\n");}
                 ;
 
-member:         lvalue[lval] DOT_TOK ID_TOK[id]                         { HANDLE_MEMBER_LVALUE_ID($lval, $id); RULE_PRINT("member <- lvalue . ID\n");}
-                | lvalue[lval] LEFT_SQUARE_TOK expr RIGHT_SQUARE_TOK    { HANDLE_MEMBER_LVALUE_EXPR($lval); RULE_PRINT("member <- lvalue [ expr ] \n");}
-                | call DOT_TOK ID_TOK                                   { RULE_PRINT("member <- call . ID\n");}
-                | call LEFT_SQUARE_TOK expr RIGHT_SQUARE_TOK            { RULE_PRINT("member <- call [ expr ]\n");}
+member:         lvalue[lval] DOT_TOK ID_TOK[id]                             { HANDLE_MEMBER_DOT(&$$, $lval, $id); RULE_PRINT("member <- lvalue . ID\n");}
+                | lvalue[lval] LEFT_SQUARE_TOK expr[expr1] RIGHT_SQUARE_TOK { HANDLE_MEMBER_BRACKET(&$$, $lval, $expr1); RULE_PRINT("member <- lvalue [ expr ] \n");}
+                | call DOT_TOK ID_TOK[id]                                   { HANDLE_MEMBER_DOT(&$$, $1, $id); RULE_PRINT("member <- call . ID\n");}
+                | call LEFT_SQUARE_TOK expr[expr1] RIGHT_SQUARE_TOK         { HANDLE_MEMBER_BRACKET(&$$, $1, $expr1); RULE_PRINT("member <- call [ expr ]\n");}
                 ;
 
-call:           call LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK   { RULE_PRINT("call <- call ( elist )\n");}
-                | lvalue[lval] callsuffix[suffix]                       { HANDLE_CALL_LVALUE_CALLSUFFIX($lval, $suffix); RULE_PRINT("call <- lvalue callsuffix\n");}
-                | LEFT_PARENTHESIS_TOK funcdef RIGHT_PARENTHESIS_TOK LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK
-                    { RULE_PRINT("call <- LEFT_PARENTHESIS_TOK funcdef RIGHT_PARENTHESIS_TOK LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK\n");}
+call:           call[call1] LEFT_PARENTHESIS_TOK elist[exprs] RIGHT_PARENTHESIS_TOK   { $$ = makeCall($call1, $exprs); RULE_PRINT("call <- call ( elist )\n");}
+                | lvalue[lval] callsuffix[suffix]                       { HANDLE_CALL_LVALUE_CALLSUFFIX(&$$, $lval, $suffix); RULE_PRINT("call <- lvalue callsuffix\n");}
+                | LEFT_PARENTHESIS_TOK funcdef[func] RIGHT_PARENTHESIS_TOK LEFT_PARENTHESIS_TOK elist[exprs] RIGHT_PARENTHESIS_TOK { HANDLE_CALL_FUNCDEF_ELIST(&$$, $func, $exprs); RULE_PRINT("call <- LEFT_PARENTHESIS_TOK funcdef RIGHT_PARENTHESIS_TOK LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK\n");}
                 ;
 
 callsuffix:     normcall[call] 	    { $$ = $call; RULE_PRINT("callsuffix <- normcall\n");}
                 | methodcall[call]	{ $$ = $call; RULE_PRINT("callsuffix <- methodcall\n");}
                 ;
 
-normcall:       LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { $$ = createCallValue(false, NULL); RULE_PRINT("normcall <- ( elist )\n");}
+normcall:       LEFT_PARENTHESIS_TOK elist[exprs] RIGHT_PARENTHESIS_TOK { $$ = createCallValue(false, NULL, $exprs); RULE_PRINT("normcall <- ( elist )\n");}
                 ;
 
-methodcall:     DOUBLE_DOT_TOK ID_TOK[id] LEFT_PARENTHESIS_TOK elist RIGHT_PARENTHESIS_TOK { $$ = createCallValue(true, $id); RULE_PRINT("methodcall <- .. ID ( elist )\n");}
+methodcall:     DOUBLE_DOT_TOK ID_TOK[id] LEFT_PARENTHESIS_TOK elist[exprs] RIGHT_PARENTHESIS_TOK { $$ = createCallValue(true, $id, $exprs); RULE_PRINT("methodcall <- .. ID ( elist )\n");}
                 ;
 
-elist:		    elist COMMA_TOK expr        { RULE_PRINT("elist <- elist , expr\n");}
-                | expr                      { RULE_PRINT("elist <- expr\n");}
-                | 		                    { RULE_PRINT("elist <- \n");}
+elist:		    elist[list] COMMA_TOK expr[expr1]   { emitIfShortCircuitStmt(&$expr1); $expr1->next = $list; $$ = $expr1; RULE_PRINT("elist <- elist , expr\n");}
+                | expr[expr1]                       { emitIfShortCircuitStmt(&$expr1); $$ = $expr1;   RULE_PRINT("elist <- expr\n");}
+                | 		                            { $$ = NULL; RULE_PRINT("elist <- \n");}
                 ;
 
-objectdef: 	    LEFT_SQUARE_TOK elist RIGHT_SQUARE_TOK 		    { RULE_PRINT("objectdef <- [ elist ]\n");}
-		        | LEFT_SQUARE_TOK indexed RIGHT_SQUARE_TOK 	    { RULE_PRINT("objectdef <- [ indexed ]\n");}
+objectdef[obj]: LEFT_SQUARE_TOK elist[list] RIGHT_SQUARE_TOK 	    { HANDLE_OBJECTDEF_ELIST(&$obj, $list); RULE_PRINT("objectdef <- [ elist ]\n");}
+		        | LEFT_SQUARE_TOK indexed[list] RIGHT_SQUARE_TOK    { HANDLE_OBEJCTDEF_INDEXED(&$obj, $list); RULE_PRINT("objectdef <- [ indexed ]\n");}
                 ;
 
-indexed:        indexed COMMA_TOK indexedelem        { RULE_PRINT("indexed <- indexed , indexedelem\n");}
-                | indexedelem                        { RULE_PRINT("indexed <- indexedelem\n");}
+indexed:        indexed[list] COMMA_TOK indexedelem[elem]   { $elem->next = $list; $$ = $elem; RULE_PRINT("indexed <- indexed , indexedelem\n");}
+                | indexedelem[elem]                         { $$ = $elem; RULE_PRINT("indexed <- indexedelem\n");}
                 ;
 
-indexedelem:    LEFT_BRACKET_TOK expr COLON_TOK expr RIGHT_BRACKET_TOK  { RULE_PRINT("indexedelem <- { expr : expr }\n");}
+indexedelem:    LEFT_BRACKET_TOK expr[key] { emitIfShortCircuitStmt(&$key); } COLON_TOK expr[value] RIGHT_BRACKET_TOK { emitIfShortCircuitStmt(&$value); $value->index = $key; $$ = $value; RULE_PRINT("indexedelem <- { expr : expr }\n");}
                 ;
 
-block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_list { scope--;  symbolTable_ExitScope(true); } RIGHT_BRACKET_TOK    { RULE_PRINT("block <- { stmt_list }\n"); }
-                | LEFT_BRACKET_TOK RIGHT_BRACKET_TOK    { symbolTable_EnterScope(); symbolTable_ExitScope(true); RULE_PRINT("block <- { }\n"); }
+block:          LEFT_BRACKET_TOK { scope++; symbolTable_EnterScope(); } stmt_list { scope--;  symbolTable_ExitScope(true); } RIGHT_BRACKET_TOK { $$ = $3; RULE_PRINT("block <- { stmt_list }\n"); }
+                | LEFT_BRACKET_TOK RIGHT_BRACKET_TOK    { $$ = NULL; symbolTable_EnterScope(); symbolTable_ExitScope(true); RULE_PRINT("block <- { }\n"); }
                 ;
 
-funcdef:        funcdeclare funcparams funcbody { RULE_PRINT("funcdef <- FUNCTION ID ( idlist ) block\n"); } 
+funcdef[func]:  funcdeclare[funcdecl] funcparams[params] funcbody[body] { RULE_FUNCDEF(&$func, $funcdecl, $params, $body); RULE_PRINT("funcdef <- FUNCTION ID ( idlist ) block\n"); } 
                 ;
 
-funcdeclare[funcdecl]:  FUNCTION_TOK ID_TOK[id]         { HANDLE_FUNCDECLARE_ID(&$funcdecl, $id); RULE_PRINT("funcdeclare <- FUNCTION ID\n"); }
-                        | FUNCTION_TOK                  { HANDLE_FUNCDECLARE_ANON(&$funcdecl); RULE_PRINT("funcdeclare <- FUNCTION\n"); }
+funcname[name]:     ID_TOK[id]  { HANDLE_FUNCNAME_ID(&$name, $id); RULE_PRINT("funcname <- ID\n"); }
+                    |           { HANDLE_FUNCNAME_ANON(&$name); RULE_PRINT("funcname <-\n"); }
+                    ;
+
+funcdeclare[funcdecl]:  FUNCTION_TOK funcname[id]       { HANDLE_FUNCDECLARE_FUNCNAME(&$funcdecl, $id); RULE_PRINT("funcdeclare <- FUNCTION funcname\n")}
+
+funcparams[params]:     LEFT_PARENTHESIS_TOK  { scope++; symbolTable_EnterScope(); } idlist[ids] { scope--;  symbolTable_ExitScope(false); } RIGHT_PARENTHESIS_TOK { HANDLE_FUNCPARAMS(&$params, $ids); RULE_PRINT("funcparams <- ( idlist )\n"); }
                         ;
-
-funcparams:     LEFT_PARENTHESIS_TOK  { scope++; symbolTable_EnterScope(); } idlist { scope--;  symbolTable_ExitScope(false); } RIGHT_PARENTHESIS_TOK { RULE_PRINT("funcparams <- ( idlist )\n"); }
-                ;
 
 funcblockstart: { uintStack_Push(&loopCounterStack, loopCounter); loopCounter = 0; uintStack_Push(&functionScopeStack, scope); }
                 ;
@@ -217,31 +233,31 @@ funcblockstart: { uintStack_Push(&loopCounterStack, loopCounter); loopCounter = 
 funcblockend:   { loopCounter = uintStack_Pop(&loopCounterStack); uintStack_Pop(&functionScopeStack); }
                 ;
 
-funcbody:       funcblockstart block funcblockend   { }
+funcbody[body]: funcblockstart block[blck] funcblockend   { HANDLE_FUNCBODY(&$body, $blck); RULE_PRINT("funcbody <- body\n");}
                 ;
 
-const:  	    INTEGER_TOK 	    { RULE_PRINT("const <- INTEGER\n");}
-                | REAL_TOK		    { RULE_PRINT("const <- REAL\n");}
-                | STRING_TOK 	    { RULE_PRINT("const <- STRING_\n");}
-                | NIL_TOK 		    { RULE_PRINT("const <- NIL\n");}
-                | TRUE_TOK		    { RULE_PRINT("const <- TRUE\n");}
-                | FALSE_TOK		    { RULE_PRINT("const <- FALSE\n");}
+const:  	    INTEGER_TOK[num] 	{ $$ = expr_NewConstNum($num);       RULE_PRINT("const <- INTEGER\n");}
+                | REAL_TOK[realnum]	{ $$ = expr_NewConstNum($realnum);   RULE_PRINT("const <- REAL\n");}
+                | STRING_TOK[str] 	{ $$ = expr_NewConstString($str);    RULE_PRINT("const <- STRING_\n");}
+                | NIL_TOK 		    { $$ = expr_New(NIL_EXPRTYPE);       RULE_PRINT("const <- NIL\n");}
+                | TRUE_TOK		    { $$ = expr_NewConstBool(true);      RULE_PRINT("const <- TRUE\n");}
+                | FALSE_TOK		    { $$ = expr_NewConstBool(false);     RULE_PRINT("const <- FALSE\n");}
                 ;
 
 idlist[list]:   idlist[tail] COMMA_TOK ID_TOK[id]   { HANDLE_IDLIST(&$list, $id, $tail); RULE_PRINT("idlist <- idlist , ID\n");}
-                | ID_TOK[id]                        { HANDLE_IDLIST(&$list, $id, NULL); RULE_PRINT("idlist <- ID\n");}
-                |                                   { $list = NULL; RULE_PRINT("idlist <- \n");}
+                | ID_TOK[id]                        { HANDLE_IDLIST(&$list, $id, EMPTY_IDLIST); RULE_PRINT("idlist <- ID\n");}
+                |                                   { $list = EMPTY_IDLIST; RULE_PRINT("idlist <- \n");}
                 ;
 
-ifstmt:         ifprefix stmt elseprefix stmt   { RULE_PRINT("ifstmt <- ifprefix stmt elsestmt\n");}
-                | ifprefix stmt                 { RULE_PRINT("ifstmt <- ifprefix stmt\n");}
+ifstmt[if]:     ifprefix[prefix1] stmt[stmt1] elseprefix[prefix2] stmt[stmt2]   { HANDLE_IFSTMT_IF_ELSE_STMT(&$if, $prefix1, $stmt1, $prefix2, $stmt2); RULE_PRINT("ifstmt <- ifprefix stmt elsestmt\n");}
+                | ifprefix[prefix] stmt[stmt1]  { HANDLE_IFSTMT_IFPREFIX_STMT(&$if, $prefix, $stmt1); RULE_PRINT("ifstmt <- ifprefix stmt\n");}
                 ;
 
-ifprefix :      IF_TOK LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK { RULE_PRINT("ifprefix <- IF ( expr )\n");}
-                ;
+ifprefix[prefix]:   IF_TOK LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK { HANDLE_IFPREFIX_IF_EXPR(&$prefix, $3); RULE_PRINT("ifprefix <- IF ( expr )\n");}
+                    ;
 
-elseprefix :    ELSE_TOK { RULE_PRINT("elseprefix <- ELSE\n");}
-                ;
+elseprefix[prefix]: ELSE_TOK { HANDLE_ELSEPREFIX_ELSE(&$prefix); RULE_PRINT("elseprefix <- ELSE\n");}
+                    ;
 
 loopenter:      { loopCounter++; }
                 ;
@@ -249,23 +265,33 @@ loopenter:      { loopCounter++; }
 loopexit:       { assert(loopCounter > 0); loopCounter--; }
                 ;
 
-loopstmt:       loopenter stmt loopexit         { RULE_PRINT("loopstmt <- loopenter stmt loopexit\n");}
+loopstmt:       loopenter stmt loopexit         { $$ = $2; RULE_PRINT("loopstmt <- loopenter stmt loopexit\n");}
                 ;
 
-whilestmt:      whilestart whileexpr loopstmt   { RULE_PRINT("whilestmt <- while stmt\n"); }
+whilestmt:      whilestart[start] whileexpr[cond] loopstmt[body]   { HANDLE_WHILESTMT(&$$, $start, $cond, $body); RULE_PRINT("whilestmt <- while stmt\n"); }
                 ;
 
-whilestart:     WHILE_TOK                       { RULE_PRINT("whilestart <- WHILE\n");}
+whilestart[start]:  WHILE_TOK                   { $start = quad_NextLabel(); RULE_PRINT("whilestart <- WHILE\n");}
+                    ;
+
+whileexpr:      LEFT_PARENTHESIS_TOK expr[cond] RIGHT_PARENTHESIS_TOK     { HANDLE_WHILEEXPR(&$$, $cond); RULE_PRINT("whileexpr <- ( expr )\n");}
                 ;
 
-whileexpr:      LEFT_PARENTHESIS_TOK expr RIGHT_PARENTHESIS_TOK     { RULE_PRINT("whileexpr <- ( expr )\n");}
+
+N:          { $$ = quad_NextLabel(); quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL); }
+            ;
+
+M:          { $$ = quad_NextLabel(); }
+            ;
+
+forstmt[for]:   forprefix[prefix] N[jump1] elist[exprs] RIGHT_PARENTHESIS_TOK N[jump2] loopstmt[stmt] N[jump3]  { RULE_FORSTMT_FORPREFIX_ELIST_STMT(&$for, $prefix, $jump1, $exprs, $jump2, $stmt, $jump3); RULE_PRINT("forstmt <- for stmt\n");}
                 ;
 
-forstmt:        forprefix elist RIGHT_PARENTHESIS_TOK loopstmt      { RULE_PRINT("forstmt <- for stmt\n");}
-                ;
+forprefix[prefix]:  FOR_TOK LEFT_PARENTHESIS_TOK elist[exprs] SEMICOLON_TOK M[marker] expr[expr1] SEMICOLON_TOK { RULE_FORPREFIX_FOR_ELIST_EXPR(&$prefix, $exprs, $marker, $expr1 ); RULE_PRINT("forprefix <- FOR ( elist ; expr ; \n");}
+                    ;
 
-forprefix:      FOR_TOK LEFT_PARENTHESIS_TOK elist SEMICOLON_TOK expr SEMICOLON_TOK   { RULE_PRINT("forprefix <- FOR ( elist ; expr ; \n");}
-                ;
+
+
 
 %%
 
@@ -286,33 +312,43 @@ int main(int argc, char** argv){
     char* outputFileName = NULL;
 
     if(argc == 3){
-        outputFileName = malloc(strlen(argv[2]) + 1);
-        strcpy(outputFileName, argv[2]);
+        outputFileName = safeStrDup(argv[2], "copying argv[2] to var");
     }else{
-        outputFileName = malloc(strlen("output.bin") + 1);
-        strcpy(outputFileName, "output.bin");
+        outputFileName = safeStrDup("output.bin", "copying \"output.bin\" to var");
         yyout = stdout;
     }
 
     globalSymbolTable = symbolTable_Init();
     currentSymbolTable = globalSymbolTable;
 
-    symbolTable_Insert("print", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("input", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("objectmemberkeys", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("objecttotalmembers", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("objectcopy", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("totalarguments", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("argument", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("typeof", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("strtonum", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("sqrt", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("cos", LIBFUNC_SYMTYPE);
-    symbolTable_Insert("sin", LIBFUNC_SYMTYPE);
+    symbolTable_Insert("print", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("input", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("objectmemberkeys", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("objecttotalmembers", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("objectcopy", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("totalarguments", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("argument", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("typeof", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("strtonum", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("sqrt", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("cos", LIB_FUNC_SYMTYPE);
+    symbolTable_Insert("sin", LIB_FUNC_SYMTYPE);
+
+    #ifdef DEBUG
+        printf("Parsing...\n");
+    #endif
     
     yyparse();
 
-    symbolTable_Print();
+    #ifdef DEBUG
+        printf("\n\nPrinting Symbol Table...\n");
+        symbolTable_Print();
+
+        printf("\n\n");
+        printf("\nPrinting Quads...\n");
+    #endif
+    
+    quad_PrintAll();
 
     // Cleaning Up
     symbolTable_FreeAll();
@@ -320,7 +356,7 @@ int main(int argc, char** argv){
     uintStack_Clear(&loopCounterStack);
     uintStack_Clear(&funcstartJumpStack);
     uintStack_Clear(&tempVarCountStack);
-    free(outputFileName);
+    safeFree(&outputFileName, "freeing compiler output filename");
 
     return 0;
 }

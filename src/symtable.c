@@ -7,11 +7,16 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+// Defined in intermediate.c
+ScopeSpace_enum currScopeSpace();
+unsigned int currScopeOffset();
+void incCurScopeOffset();
+
 #define SCOPE_ACTIVE 1
 #define SCOPE_INACTIVE 0
 
-symbolTable_ptr globalSymbolTable;
-symbolTable_ptr currentSymbolTable;
+SymbolTable_ptr globalSymbolTable;
+SymbolTable_ptr currentSymbolTable;
 
 #define HASH_MULTIPLIER 65599
 
@@ -27,23 +32,23 @@ static unsigned int symbolTable_Hash(const char *key, unsigned int size){
 #define MAX_SIZE 32768
 int tableSizes[] = {MIN_SIZE, 512, 1024, 2048, 4096, 8192, 16384, MAX_SIZE};
 
-symbolTable_ptr symbolTable_Init(){
-    symbolTable_ptr table = safeCalloc(1, sizeof(struct symbolTable), "creating Symbol Table");
+SymbolTable_ptr symbolTable_Init(){
+    SymbolTable_ptr table = safeCalloc(1, sizeof(struct SymbolTable), "creating Symbol Table");
     table->capacityIndex = 0;
-    table->buckets = safeCalloc(tableSizes[table->capacityIndex], sizeof(symbolTableEntry_ptr), "creating Symbol Table Buckets");
+    table->buckets = safeCalloc(tableSizes[table->capacityIndex], sizeof(SymbolTableEntry_ptr), "creating Symbol Table Buckets");
     return table;
 }
 
-void symbolTableEntry_Destroy(symbolTableEntry_ptr* entry){
+void symbolTableEntry_Destroy(SymbolTableEntry_ptr* entry){
     safeFree(&((*entry)->name), "freeing Symbol Table Entry name");
     safeFree(entry, "freeing Symbol Table Entry");
 }
 
-void symbolTable_Destroy(symbolTable_ptr* table){
+void symbolTable_Destroy(SymbolTable_ptr* table){
     for(unsigned int i = 0; i < tableSizes[(*table)->capacityIndex]; i++){
-        symbolTableEntry_ptr current = (*table)->buckets[i];
+        SymbolTableEntry_ptr current = (*table)->buckets[i];
         while(current){
-            symbolTableEntry_ptr toDelete = current;
+            SymbolTableEntry_ptr toDelete = current;
             current = current->next;
             symbolTableEntry_Destroy(&toDelete);
         }
@@ -54,10 +59,10 @@ void symbolTable_Destroy(symbolTable_ptr* table){
 }
 
 void symbolTable_FreeAll(){
-    symbolTable_ptr temp = globalSymbolTable;
+    SymbolTable_ptr temp = globalSymbolTable;
 
     while(temp != NULL){
-        symbolTable_ptr next = temp->next;
+        SymbolTable_ptr next = temp->next;
         symbolTable_Destroy(&temp);
         temp = next;
     }
@@ -93,12 +98,12 @@ void symbolTable_Resize(){
     unsigned int oldCapacity = tableSizes[currentSymbolTable->capacityIndex];
     unsigned int newCapacity = tableSizes[++currentSymbolTable->capacityIndex];
 
-    symbolTableEntry_ptr* newBuckets = safeCalloc(newCapacity, sizeof(symbolTableEntry_ptr), "creating resized Symbol Table Buckets");
+    SymbolTableEntry_ptr* newBuckets = safeCalloc(newCapacity, sizeof(SymbolTableEntry_ptr), "creating resized Symbol Table Buckets");
 
     for(unsigned int i = 0; i < oldCapacity; i++){
-        symbolTableEntry_ptr entry = currentSymbolTable->buckets[i];
+        SymbolTableEntry_ptr entry = currentSymbolTable->buckets[i];
         while(entry){
-            symbolTableEntry_ptr nextEntry = entry->next;
+            SymbolTableEntry_ptr nextEntry = entry->next;
             unsigned int newIndex = symbolTable_Hash(entry->name, newCapacity);
             entry->next = newBuckets[newIndex];
             newBuckets[newIndex] = entry;
@@ -110,14 +115,14 @@ void symbolTable_Resize(){
     currentSymbolTable->buckets = newBuckets;
 }
 
-symbolTableEntry_ptr symbolTable_Insert(const char *name, symbolType_enum type){
+SymbolTableEntry_ptr symbolTable_Insert(const char *name, SymbolType_enum type){
 
     if(currentSymbolTable->symbolCount == currentSymbolTable->capacityIndex){
         symbolTable_Resize();
     }
 
     unsigned int index = symbolTable_Hash(name, tableSizes[currentSymbolTable->capacityIndex]);
-    symbolTableEntry_ptr newEntry = safeCalloc(1, sizeof(struct symbolTableEntry), "creating Symbol Table Entry");
+    SymbolTableEntry_ptr newEntry = safeCalloc(1, sizeof(struct SymbolTableEntry), "creating Symbol Table Entry");
     newEntry->isActive = SCOPE_ACTIVE;
 
     // Keeping the active symbols in a stack for easy/fast hiding
@@ -132,22 +137,22 @@ symbolTableEntry_ptr symbolTable_Insert(const char *name, symbolType_enum type){
     currentSymbolTable->buckets[index] = newEntry;
     currentSymbolTable->symbolCount++;
 
-    if(type == LIBFUNC_SYMTYPE) newEntry->totalFormals = 0;
-    else if(type == USERFUNC_SYMTYPE) {}
+    if(type == LIB_FUNC_SYMTYPE) newEntry->totalFormals = 0;
+    else if(type == USER_FUNC_SYMTYPE) {}
     else {
-        // newEntry->space = currScopeSpace();
-        // newEntry->offset = currScopeOffset();
-        // incCurScopeOffset();
+        newEntry->space = currScopeSpace();
+        newEntry->offset = currScopeOffset();
+        incCurScopeOffset();
     }
 
     return newEntry;
 }
 
-symbolTableEntry_ptr symbolTable_Lookup(const char *name){
-    symbolTable_ptr tempTable = currentSymbolTable;
+SymbolTableEntry_ptr symbolTable_Lookup(const char *name){
+    SymbolTable_ptr tempTable = currentSymbolTable;
     while(tempTable){
         unsigned int index = symbolTable_Hash(name, tableSizes[tempTable->capacityIndex]);
-        symbolTableEntry_ptr entry = tempTable->buckets[index];
+        SymbolTableEntry_ptr entry = tempTable->buckets[index];
         while(entry != NULL){
             if(entry->isActive == SCOPE_INACTIVE){
                 entry = entry->next;
@@ -167,9 +172,9 @@ symbolTableEntry_ptr symbolTable_Lookup(const char *name){
     return NULL;
 }
 
-symbolTableEntry_ptr symbolTable_LocalLookup(const char *name){
+SymbolTableEntry_ptr symbolTable_LocalLookup(const char *name){
     unsigned int index = symbolTable_Hash(name, tableSizes[currentSymbolTable->capacityIndex]);
-    symbolTableEntry_ptr entry = currentSymbolTable->buckets[index];
+    SymbolTableEntry_ptr entry = currentSymbolTable->buckets[index];
     while(entry != NULL){
         if(entry->isActive == SCOPE_INACTIVE){
             entry = entry->next;
@@ -186,9 +191,9 @@ symbolTableEntry_ptr symbolTable_LocalLookup(const char *name){
     return NULL;
 }
 
-symbolTableEntry_ptr symbolTable_GlobalLookup(const char *name){
+SymbolTableEntry_ptr symbolTable_GlobalLookup(const char *name){
     unsigned int index = symbolTable_Hash(name, tableSizes[globalSymbolTable->capacityIndex]);
-    symbolTableEntry_ptr entry = globalSymbolTable->buckets[index];
+    SymbolTableEntry_ptr entry = globalSymbolTable->buckets[index];
     while(entry != NULL){
         if(entry->isActive == SCOPE_INACTIVE){
             entry = entry->next;
@@ -204,22 +209,22 @@ symbolTableEntry_ptr symbolTable_GlobalLookup(const char *name){
     return NULL;
 }
 
-static const char* symbolType_ToString(symbolType_enum type){
+static const char* symbolType_ToString(SymbolType_enum type){
     switch(type){
-        case GLOBALVAR_SYMTYPE: return "GLOBALVAR";
-        case LOCALVAR_SYMTYPE: return "LOCALVAR";
-        case FORMALVAR_SYMTYPE: return "FORMALVAR";
-        case USERFUNC_SYMTYPE: return "USERFUNC";
-        case LIBFUNC_SYMTYPE: return "LIBFUNC";
+        case GLOBAL_VAR_SYMTYPE: return "GLOBALVAR";
+        case LOCAL_VAR_SYMTYPE: return "LOCALVAR";
+        case FORMAL_VAR_SYMTYPE: return "FORMALVAR";
+        case USER_FUNC_SYMTYPE: return "USERFUNC";
+        case LIB_FUNC_SYMTYPE: return "LIBFUNC";
         default: return "UNKNOWN";
     }
 }
 
-// static const char* scopeSpace_ToString(scopeSpace_enum space){
+// static const char* scopeSpace_ToString(ScopeSpace_enum space){
 //     switch(space){
-//         case PROGRAMVAR: return "PROGRAMVAR";
-//         case FUNCTIONLOCAL: return "FUNCTIONLOCAL";
-//         case FORMALARG: return "FORMALARG";
+//         case PROGRAM_VAR_SPACE: return "PROGRAM_VAR_SPACE";
+//         case FUNCTION_LOCAL_SPACE: return "FUNCTION_LOCAL_SPACE";
+//         case FORMAL_ARG_SPACE: return "FORMAL_ARG_SPACE";
 //         default: return "UNKNOWN";
 //     }
 // }
@@ -230,7 +235,7 @@ void symbolTable_Print(){
     printf("                SYMBOL TABLE\n");
     printf("===========================================\n\n");
 
-    symbolTable_ptr currentScope = globalSymbolTable;
+    SymbolTable_ptr currentScope = globalSymbolTable;
     unsigned int scopeNum = 0;
 
     while(currentScope != NULL){
@@ -259,9 +264,9 @@ void symbolTable_Print(){
         printf("-------------------------------------------\n");
 
         for(unsigned int i = 0; i < tableSizes[currentScope->capacityIndex]; i++){
-            symbolTableEntry_ptr entry = currentScope->buckets[i];
+            SymbolTableEntry_ptr entry = currentScope->buckets[i];
             while(entry != NULL){
-                if(entry->type == LIBFUNC_SYMTYPE){
+                if(entry->type == LIB_FUNC_SYMTYPE){
                     /* For library functions, print only name and type in purple */
                     printf("%-20s \033[35m%-15s\033[0m\n",
                            entry->name,
@@ -273,7 +278,7 @@ void symbolTable_Print(){
                            symbolType_ToString(entry->type),
                            entry->line);
 
-                    // if(entry->type == USERFUNC_SYMTYPE){
+                    // if(entry->type == USER_FUNC_SYMTYPE){
                     //     printf("%-16s %-8s ", "-", "-");
                     //     printf("addr:%-4u locals:%-2u formals:%-2u",
                     //            entry->iaddress,

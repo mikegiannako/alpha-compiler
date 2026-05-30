@@ -8,51 +8,84 @@
 extern unsigned int loopCounter;
 extern unsigned int scope;
 extern int yylineno;
-extern uintStack_ptr functionScopeStack;
-extern uintStack_ptr loopCounterStack;
-extern uintStack_ptr funcstartJumpStack;
-extern uintStack_ptr tempVarCountStack;
+extern UIntStack_ptr functionScopeStack;
+extern UIntStack_ptr loopCounterStack;
+extern UIntStack_ptr funcstartJumpStack;
+extern UIntStack_ptr tempVarCountStack;
+extern UIntStack_ptr scopeOffsetStack;
 
-void HANDLE_BREAK();
-void HANDLE_CONTINUE();
-void HANDLE_RETURN();
+// ------------------ STMT ------------------
+void HANDLE_STMT_GENERIC(Stmt_ptr* stmt);
+void HANDLE_STMTLIST(Stmt_ptr* stmt_list, Stmt_ptr parsed_stmts, Stmt_ptr curr_stmt);
+void HANDLE_BREAK(Stmt_ptr* stmt);
+void HANDLE_CONTINUE(Stmt_ptr* stmt);
+void HANDLE_RETURN(Stmt_ptr* stmt, Expr_ptr expr);
 
-//========================
-
-void HANDLE_TERM_INC_LVAL(symbolTableEntry_ptr lvalue);
-void HANDLE_TERM_LVAL_INC(symbolTableEntry_ptr lvalue);
-void HANDLE_TERM_DEC_LVAL(symbolTableEntry_ptr lvalue);
-void HANDLE_TERM_LVAL_DEC(symbolTableEntry_ptr lvalue);
-
-//========================
-
-void HANDLE_ASSIGNEXPR(symbolTableEntry_ptr lvalue);
-
-//========================
-
-void HANDLE_LVALUE_ID(symbolTableEntry_ptr *lvalue, const char* id);
-void HANDLE_LVALUE_LOCAL_ID(symbolTableEntry_ptr *lvalue, const char* id);
-void HANDLE_LVALUE_GLOBAL_ID(symbolTableEntry_ptr *lvalue, const char* id);
-
-//========================
-
-void HANDLE_MEMBER_LVALUE_ID(symbolTableEntry_ptr lvalue, const char* id);
-void HANDLE_MEMBER_LVALUE_EXPR(symbolTableEntry_ptr lvalue);
-
-//========================
-
-void HANDLE_CALL_LVALUE_CALLSUFFIX(symbolTableEntry_ptr lvalue, Call_ptr callsuffix);
-
-//========================
+// ------------------ EXPR ------------------
+void RULE_EXPR_ARITHOP(Expr_ptr* expr, Expr_ptr left, Expr_ptr right, enum yytokentype op);
+void RULE_EXPR_RELOP(Expr_ptr* expr, Expr_ptr left, Expr_ptr right, enum yytokentype op);
+void RULE_EXPR_AND(Expr_ptr* expr, Expr_ptr left, unsigned int marker, Expr_ptr right);
+void RULE_EXPR_OR(Expr_ptr* expr, Expr_ptr left, unsigned int marker, Expr_ptr right);
 
 
-void HANDLE_FUNCDECLARE_ID(symbolTableEntry_ptr *lvalue, const char* id);
-void HANDLE_FUNCDECLARE_ANON(symbolTableEntry_ptr *lvalue);
-void HANDLE_FUNCPARAMS();
+// ------------------ TERM ------------------
+void HANDLE_TERM_UMINUS_EXPR(Expr_ptr* term, Expr_ptr expr);
+void HANDLE_TERM_NOT_EXPR(Expr_ptr* term, Expr_ptr expr);
+void HANDLE_TERM_INC_LVAL(Expr_ptr* term, Expr_ptr lvalue);
+void HANDLE_TERM_LVAL_INC(Expr_ptr* term, Expr_ptr lvalue);
+void HANDLE_TERM_DEC_LVAL(Expr_ptr* term, Expr_ptr lvalue);
+void HANDLE_TERM_LVAL_DEC(Expr_ptr* term, Expr_ptr lvalue);
 
-//========================
+// ------------------ ASSIGNEXPR ------------------
+void HANDLE_ASSIGNEXPR(Expr_ptr* assignexpr, Expr_ptr lvalue, Expr_ptr expr);
 
-void HANDLE_IDLIST(symbolTableEntry_ptr *idlist, const char* id, symbolTableEntry_ptr list_tail);
+// ------------------ PRIMARY ------------------
+void HANDLE_PRIMARY_FUNCDEF(Expr_ptr* primary, SymbolTableEntry_ptr funcdef);
+
+// ------------------ LVALUE ------------------
+void HANDLE_LVALUE_ID(Expr_ptr* lvalue, const char* id);
+void HANDLE_LVALUE_LOCAL_ID(Expr_ptr* lvalue, const char* id);
+void HANDLE_LVALUE_GLOBAL_ID(Expr_ptr* lvalue, const char* id);
+
+// ------------------ MEMBER ------------------
+void HANDLE_MEMBER_DOT(Expr_ptr* member, Expr_ptr lvalue, const char* id);
+void HANDLE_MEMBER_BRACKET(Expr_ptr* member, Expr_ptr lvalue, Expr_ptr expr);
+
+// ------------------ CALL ------------------
+void HANDLE_CALL_LVALUE_CALLSUFFIX(Expr_ptr* call, Expr_ptr lvalue, Call_ptr callsuffix);
+void HANDLE_CALL_FUNCDEF_ELIST(Expr_ptr* call, SymbolTableEntry_ptr funcdef, Expr_ptr elist);
+
+// ------------------ OBJECTDEF ------------------
+void HANDLE_OBJECTDEF_ELIST(Expr_ptr* objectdef, Expr_ptr elist);
+void HANDLE_OBEJCTDEF_INDEXED(Expr_ptr* objectdef, Expr_ptr indexed);
+
+// ------------------ FUNCDEF ------------------
+void RULE_FUNCDEF(SymbolTableEntry_ptr* funcdef, SymbolTableEntry_ptr funcdeclare, unsigned int funcparams, unsigned int funcbody);
+void HANDLE_FUNCNAME_ID(SymbolTableEntry_ptr* funcname, const char* id);
+void HANDLE_FUNCNAME_ANON(SymbolTableEntry_ptr* funcname);
+void HANDLE_FUNCDECLARE_FUNCNAME(SymbolTableEntry_ptr* funcdecl, SymbolTableEntry_ptr name_sym);
+void HANDLE_FUNCPARAMS(unsigned int* funcparams, unsigned int idlist);
+void HANDLE_FUNCBODY(unsigned int* funcbody, Stmt_ptr block);
+
+// ------------------ CONST ------------------
+
+// ------------------ IDLIST ------------------
+void HANDLE_IDLIST(unsigned int *idlist, const char* id, unsigned int list_tail);
+
+// ------------------ IF ------------------
+void HANDLE_IFSTMT_IF_ELSE_STMT(Stmt_ptr* ifstmt, unsigned int ifprefix, Stmt_ptr stmt1, unsigned int elseprefix, Stmt_ptr stmt2);
+void HANDLE_IFSTMT_IFPREFIX_STMT(Stmt_ptr* ifstmt, unsigned int ifprefix, Stmt_ptr stmt);
+void HANDLE_IFPREFIX_IF_EXPR(unsigned int* ifprefix, Expr_ptr expr);
+void HANDLE_ELSEPREFIX_ELSE(unsigned int* elseprefix);
+
+// ------------------ WHILE ------------------
+void HANDLE_WHILESTMT(Stmt_ptr* whilestmt, unsigned int whilestart, unsigned int whileexpr, Stmt_ptr stmt);
+void HANDLE_WHILEEXPR(unsigned int* whileexpr, Expr_ptr expr);
+
+// ------------------ FOR ------------------
+void RULE_FORSTMT_FORPREFIX_ELIST_STMT(Stmt_ptr* forstmt, ForLoopPrefix_ptr forprefix, unsigned int jump1, Expr_ptr elist,\
+                                                                             unsigned int jump2, Stmt_ptr stmt, unsigned int jump3);
+void RULE_FORPREFIX_FOR_ELIST_EXPR(ForLoopPrefix_ptr* forprefix, Expr_ptr elist, unsigned int marker, Expr_ptr expr);
 
 #endif
 

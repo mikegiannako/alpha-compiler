@@ -10,9 +10,9 @@
     #include "../include/memory_operations.h"
     #include "../build/parser.h"
 
-    strBuffer_ptr stringBuffer;
+    StrBuffer_ptr stringBuffer;
     unsigned int stringStartLine;
-    uintStack_ptr lineStack = NULL;
+    UIntStack_ptr lineStack = NULL;
 
     int yycolumn = 1;
 

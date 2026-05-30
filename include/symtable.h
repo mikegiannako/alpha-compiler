@@ -4,62 +4,61 @@
 #include <stdbool.h>
 #include "../include/generic_stack.h"
 
-typedef enum scopeSpace scopeSpace_enum;
-typedef enum symbolType symbolType_enum;
-typedef struct symbolTableEntry* symbolTableEntry_ptr;
-typedef struct symbolTable* symbolTable_ptr;
+typedef enum ScopeSpace ScopeSpace_enum;
+typedef enum SymbolType SymbolType_enum;
+typedef struct SymbolTableEntry* SymbolTableEntry_ptr;
+typedef struct SymbolTable* SymbolTable_ptr;
 
 extern unsigned int scope;
 extern int yylineno;
 
-extern symbolTable_ptr globalSymbolTable;
-extern symbolTable_ptr currentSymbolTable;
+extern SymbolTable_ptr globalSymbolTable;
+extern SymbolTable_ptr currentSymbolTable;
 
-
-enum scopeSpace {
-    PROGRAMVAR, FUNCTIONLOCAL, FORMALARG
+enum ScopeSpace {
+    PROGRAM_VAR_SPACE, FUNCTION_LOCAL_SPACE, FORMAL_ARG_SPACE
 };
 
-enum symbolType {
-    GLOBALVAR_SYMTYPE, LOCALVAR_SYMTYPE, FORMALVAR_SYMTYPE, USERFUNC_SYMTYPE, LIBFUNC_SYMTYPE
+enum SymbolType {
+    GLOBAL_VAR_SYMTYPE, LOCAL_VAR_SYMTYPE, FORMAL_VAR_SYMTYPE, USER_FUNC_SYMTYPE, LIB_FUNC_SYMTYPE
 };
 
-struct symbolTableEntry { 
+struct SymbolTableEntry { 
     int isActive;
     const char *name;
     unsigned int scope;
     unsigned int line; 
-    symbolType_enum type;
+    SymbolType_enum type;
 
-    scopeSpace_enum space;
+    ScopeSpace_enum space;
     unsigned int offset;
 
     unsigned int iaddress;
     unsigned int totalLocals;
     unsigned int totalFormals;
 
-    struct symbolTableEntry *next;
+    struct SymbolTableEntry *next;
 };
 
-struct symbolTable {
-    symbolTableEntry_ptr *buckets;
+struct SymbolTable {
+    SymbolTableEntry_ptr *buckets;
     unsigned int capacityIndex;
     unsigned int symbolCount;
     unsigned int scope;
-    intPtrStack_ptr activeSymbolStack;
+    IntPtrStack_ptr activeSymbolStack;
 
-    struct symbolTable* next;
-    struct symbolTable* prev;
+    struct SymbolTable* next;
+    struct SymbolTable* prev;
 };
 
-symbolTable_ptr symbolTable_Init();
+SymbolTable_ptr symbolTable_Init();
 void symbolTable_FreeAll();
 void symbolTable_EnterScope();
 void symbolTable_ExitScope(bool clearScope);
-symbolTableEntry_ptr symbolTable_Insert(const char *name, symbolType_enum type);
-symbolTableEntry_ptr symbolTable_Lookup(const char *name);
-symbolTableEntry_ptr symbolTable_LocalLookup(const char *name);
-symbolTableEntry_ptr symbolTable_GlobalLookup(const char *name);
+SymbolTableEntry_ptr symbolTable_Insert(const char *name, SymbolType_enum type);
+SymbolTableEntry_ptr symbolTable_Lookup(const char *name);
+SymbolTableEntry_ptr symbolTable_LocalLookup(const char *name);
+SymbolTableEntry_ptr symbolTable_GlobalLookup(const char *name);
 
 void symbolTable_Print();
 

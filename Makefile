@@ -10,7 +10,8 @@ SRCS = \
 	src/memory_operations.c \
 	src/symtable.c \
 	src/rule_handlers.c \
-	src/intermediate.c
+	src/intermediate.c \
+	src/quad.c
 
 .PHONY: all clean
 
