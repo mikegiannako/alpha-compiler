@@ -54,7 +54,8 @@ typedef struct Stmt {
 
 typedef struct ForLoopPrefix {
     unsigned int test;
-    unsigned int enter;
+    unsigned int enter;                 // materialise mode: index of the `if_eq` test
+    unsigned int trueList, falseList;   // backpatch mode: condition's pending jump lists
 }* ForLoopPrefix_ptr;
 
 

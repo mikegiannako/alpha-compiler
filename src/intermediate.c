@@ -232,7 +232,6 @@ char* newTempVarName(){
 }
 
 void resetTempVarCounter(){
-    return;
     tempVarCounter = 0U;
 }
 

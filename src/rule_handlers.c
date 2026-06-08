@@ -3,6 +3,7 @@
 #include "../include/symtable.h"
 #include "../include/utils.h"
 #include "../include/quad.h"
+#include "../include/config.h"
 
 #include <assert.h>
 
@@ -57,9 +58,10 @@ void HANDLE_RETURN(Stmt_ptr* stmt, Expr_ptr expr){
 
     HANDLE_STMT_GENERIC(stmt);
 
-    (*stmt)->returnList = 0; // quadIndexList_New(quad_NextLabel());
-    // TODO: add for phase4
-    // quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    if(config.jumpAfterReturn){
+        (*stmt)->returnList = quadIndexList_New(quad_NextLabel());
+        quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    }
 }
 
 // ------------------ EXPR ------------------
@@ -497,11 +499,10 @@ void RULE_FUNCDEF(SymbolTableEntry_ptr* funcdef, SymbolTableEntry_ptr funcdeclar
 
     quad_Emit(FUNC_END_QUADOP, expr_FromLvalue(*funcdef), NULL, NULL, NO_LABEL);
 
-
-    // TODO: Uncomment for phase4
-    // Pathcing the jump before funcstart label so that during serial execution the function code is skipped
-    // unsigned int label = uintStack_Pop(&funcstartJumpStack);
-    // quad_PatchLabel(label, quad_NextLabel());
+    if(config.jumpBeforeFuncstart){
+        unsigned int label = uintStack_Pop(&funcstartJumpStack);
+        quad_PatchLabel(label, quad_NextLabel());
+    }
 }
 
 void HANDLE_FUNCNAME_ID(SymbolTableEntry_ptr *funcname, const char* id){
@@ -539,9 +540,10 @@ void HANDLE_FUNCNAME_ANON(SymbolTableEntry_ptr *funcname){
 }
 
 void HANDLE_FUNCDECLARE_FUNCNAME(SymbolTableEntry_ptr *funcdecl, SymbolTableEntry_ptr name_sym){
-    // TODO: Uncomment for phase4
-    // uintStack_Push(&funcstartJumpStack, quad_NextLabel());
-    // quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    if(config.jumpBeforeFuncstart){
+        uintStack_Push(&funcstartJumpStack, quad_NextLabel());
+        quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    }
 
     name_sym->iaddress = quad_NextLabel();
     *funcdecl = name_sym;
@@ -576,8 +578,10 @@ void HANDLE_FUNCBODY(unsigned int* funcbody, Stmt_ptr block){
 
     // Restoring temp var count to continue counting from where we left before func declare
     tempVarCounter = uintStack_Pop(&tempVarCountStack);
-    // TODO: Uncomment for phase4
-    // quadIndexList_Patch(block->returnList, quad_NextLabel());
+
+    if(block){
+        quadIndexList_Patch(block->returnList, quad_NextLabel());
+    }
 }
 
 // ------------------ CONST ------------------
@@ -613,7 +617,7 @@ void HANDLE_IFSTMT_IF_ELSE_STMT(Stmt_ptr* ifstmt, unsigned int ifprefix, Stmt_pt
     assert(stmt1);
     assert(stmt2);
     
-    quad_PatchLabel(ifprefix, elseprefix + 1);
+    quadIndexList_Patch(ifprefix, elseprefix + 1);
     quad_PatchLabel(elseprefix, quad_NextLabel());
 
     HANDLE_STMT_GENERIC(ifstmt);
@@ -624,17 +628,24 @@ void HANDLE_IFSTMT_IF_ELSE_STMT(Stmt_ptr* ifstmt, unsigned int ifprefix, Stmt_pt
 }
 
 void HANDLE_IFSTMT_IFPREFIX_STMT(Stmt_ptr* ifstmt, unsigned int ifprefix, Stmt_ptr stmt){
-    quad_PatchLabel(ifprefix, quad_NextLabel());
+    quadIndexList_Patch(ifprefix, quad_NextLabel());
 
     *ifstmt = stmt;
 }
 
 void HANDLE_IFPREFIX_IF_EXPR(unsigned int* ifprefix, Expr_ptr expr){
-    emitIfShortCircuitStmt(&expr);
-
-    quad_Emit(IF_EQ_QUADOP, NULL, expr, expr_NewConstBool(true), quad_NextLabel() + 2);
-    *ifprefix = quad_NextLabel();
-    quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    // Both modes hand back a quad-index list to be patched to the "skip body"
+    // target; the true path always falls through to the next emitted quad.
+    if(config.shortCircuitBackpatch){
+        emitIfNotBool(&expr);
+        quadIndexList_Patch(expr->trueList, quad_NextLabel());
+        *ifprefix = expr->falseList;
+    } else {
+        emitIfShortCircuitStmt(&expr);
+        quad_Emit(IF_EQ_QUADOP, NULL, expr, expr_NewConstBool(true), quad_NextLabel() + 2);
+        *ifprefix = quad_NextLabel();
+        quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    }
 }
 
 void HANDLE_ELSEPREFIX_ELSE(unsigned int* elseprefix){
@@ -646,7 +657,7 @@ void HANDLE_ELSEPREFIX_ELSE(unsigned int* elseprefix){
 
 void HANDLE_WHILESTMT(Stmt_ptr* whilestmt, unsigned int whilestart, unsigned int whileexpr, Stmt_ptr stmt){
     quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, whilestart);
-    quad_PatchLabel(whileexpr, quad_NextLabel());
+    quadIndexList_Patch(whileexpr, quad_NextLabel());
 
     quadIndexList_Patch(stmt->breakList, quad_NextLabel());
     quadIndexList_Patch(stmt->contList, whilestart);
@@ -657,11 +668,16 @@ void HANDLE_WHILESTMT(Stmt_ptr* whilestmt, unsigned int whilestart, unsigned int
 }
 
 void HANDLE_WHILEEXPR(unsigned int* whileexpr, Expr_ptr expr){
-    emitIfShortCircuitStmt(&expr);
-
-    quad_Emit(IF_EQ_QUADOP, NULL, expr, expr_NewConstBool(true), quad_NextLabel() + 2);
-    *whileexpr = quad_NextLabel();
-    quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    if(config.shortCircuitBackpatch){
+        emitIfNotBool(&expr);
+        quadIndexList_Patch(expr->trueList, quad_NextLabel());
+        *whileexpr = expr->falseList;
+    } else {
+        emitIfShortCircuitStmt(&expr);
+        quad_Emit(IF_EQ_QUADOP, NULL, expr, expr_NewConstBool(true), quad_NextLabel() + 2);
+        *whileexpr = quad_NextLabel();
+        quad_Emit(JUMP_QUADOP, NULL, NULL, NULL, NO_LABEL);
+    }
 }
 
 // ------------------ FOR ------------------
@@ -669,8 +685,17 @@ void HANDLE_WHILEEXPR(unsigned int* whileexpr, Expr_ptr expr){
 void RULE_FORSTMT_FORPREFIX_ELIST_STMT(Stmt_ptr* forstmt, ForLoopPrefix_ptr forprefix, unsigned int jump1, \
                                             Expr_ptr elist, unsigned int jump2, Stmt_ptr stmt, unsigned int jump3)
 {
-    quad_PatchLabel(forprefix->enter, jump2 + 1);
-    quad_PatchLabel(jump1, quad_NextLabel());
+    if(config.shortCircuitBackpatch){
+        // jump1 is emitted unconditionally by the `N` grammar rule. Reuse it as
+        // the trampoline that carries the true path over the increment and into
+        // the body, so it isn't left as dead code. The false path exits directly.
+        quadIndexList_Patch(forprefix->trueList, jump1);
+        quad_PatchLabel(jump1, jump2 + 1);
+        quadIndexList_Patch(forprefix->falseList, quad_NextLabel());
+    } else {
+        quad_PatchLabel(forprefix->enter, jump2 + 1);
+        quad_PatchLabel(jump1, quad_NextLabel());
+    }
     quad_PatchLabel(jump2, forprefix->test);
     quad_PatchLabel(jump3, jump1 + 1);
 
@@ -685,11 +710,16 @@ void RULE_FORSTMT_FORPREFIX_ELIST_STMT(Stmt_ptr* forstmt, ForLoopPrefix_ptr forp
 
 
 void RULE_FORPREFIX_FOR_ELIST_EXPR(ForLoopPrefix_ptr* forprefix, Expr_ptr elist, unsigned int marker, Expr_ptr expr){
-    emitIfShortCircuitStmt(&expr);
-
     *forprefix = safeCalloc(1, sizeof(struct ForLoopPrefix), "creating new ForLoopPrefix struct for forprefix rule");
     (*forprefix)->test = marker;
-    (*forprefix)->enter = quad_NextLabel();
 
-    quad_Emit(IF_EQ_QUADOP, NULL, expr, expr_NewConstBool(true), NO_LABEL);
+    if(config.shortCircuitBackpatch){
+        emitIfNotBool(&expr);
+        (*forprefix)->trueList = expr->trueList;
+        (*forprefix)->falseList = expr->falseList;
+    } else {
+        emitIfShortCircuitStmt(&expr);
+        (*forprefix)->enter = quad_NextLabel();
+        quad_Emit(IF_EQ_QUADOP, NULL, expr, expr_NewConstBool(true), NO_LABEL);
+    }
 }

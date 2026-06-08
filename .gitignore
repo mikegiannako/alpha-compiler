@@ -1,2 +1,4 @@
 build/*
 *.in
+custom_tests/*
+tests/*

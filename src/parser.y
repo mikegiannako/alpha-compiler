@@ -11,6 +11,7 @@
     #include "../include/intermediate.h"
     #include "../include/intermediate_rule_types.h"
     #include "../include/quad.h"
+    #include "../include/config.h"
 
     #ifdef DEBUG
         #define RULE_PRINT(rule) {fprintf(stderr, "LINE: %d ", yylineno); fprintf(stderr, rule);}
@@ -296,13 +297,29 @@ forprefix[prefix]:  FOR_TOK LEFT_PARENTHESIS_TOK elist[exprs] SEMICOLON_TOK M[ma
 %%
 
 int main(int argc, char** argv){
-     if(argc < 2 || argc > 3){
-        printf("Usage: %s <input_file> (<output_file>)\n", argv[0]);
+    const char* inputFileName = NULL;
+    const char* outputArg = NULL;
+
+    // Split argv into recognised toggle flags and the positional <input> [output].
+    for(int i = 1; i < argc; i++){
+        if(config_TryParseFlag(argv[i])) continue;
+        if(argv[i][0] == '-' && argv[i][1] == '-'){
+            printf("Error: unknown flag '%s'\n", argv[i]);
+            return 1;
+        }
+        if(inputFileName == NULL)      inputFileName = argv[i];
+        else if(outputArg == NULL)     outputArg = argv[i];
+        else { printf("Error: too many arguments\n"); return 1; }
+    }
+
+    if(inputFileName == NULL){
+        printf("Usage: %s [flags] <input_file> (<output_file>)\n", argv[0]);
+        printf("Flags: --[no-]funcstart-jump --[no-]return-jump --[no-]short-circuit-backpatch\n");
         return 1;
     }
 
-    sourceFileName = argv[1];
-    yyin = fopen(argv[1], "r");
+    sourceFileName = inputFileName;
+    yyin = fopen(inputFileName, "r");
 
     if(yyin == NULL){
         printf("Error: File not found\n");
@@ -311,8 +328,8 @@ int main(int argc, char** argv){
 
     char* outputFileName = NULL;
 
-    if(argc == 3){
-        outputFileName = safeStrDup(argv[2], "copying argv[2] to var");
+    if(outputArg != NULL){
+        outputFileName = safeStrDup(outputArg, "copying output filename arg to var");
     }else{
         outputFileName = safeStrDup("output.bin", "copying \"output.bin\" to var");
         yyout = stdout;

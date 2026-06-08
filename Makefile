@@ -11,7 +11,8 @@ SRCS = \
 	src/symtable.c \
 	src/rule_handlers.c \
 	src/intermediate.c \
-	src/quad.c
+	src/quad.c \
+	src/config.c
 
 .PHONY: all clean
 

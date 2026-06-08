@@ -4,8 +4,8 @@
 
 - Use `camelCase` for variables.
 - Function names have the format `typeInCamel_ActionInPascal` (e.g., `strBuffer_AppendChar`). If no type is applicable, use `camelCase` for the function name (e.g., `getEscapeChar`).
-- Struct names have the format `datatypeDataStructure_vartype` (e.g., `strBuffer_ptr` which means that the strBuffer_ptr type is a point to a struct called `struct strBuffer`).
-- Use `ALL_CAPS` for macros and constants.
+- Struct names have the format `DatatypeDataStructure_vartype` (e.g., `StrBuffer_ptr` which means that the StrBuffer_ptr type is a pointer to a struct called `struct strBuffer`).
+- Use `ALL_CAPS` for enums and constants. Enums should also include the name of the enum itself (or something indicative of it).
 
 ### File Naming Conventions
 
