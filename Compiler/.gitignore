@@ -1,4 +1,6 @@
 build/*
 *.in
+*.bin
+*.txt
 custom_tests/*
 tests/*
