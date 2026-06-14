@@ -41,3 +41,31 @@ void strBuffer_Free(StrBuffer_ptr buf){
     safeFree(&buf->data, "freeing string buffer data");
     safeFree(&buf, "freeing string buffer struct");
 }
+
+// ----------------- Tracking of lexer-owned strings -----------------
+
+typedef struct TrackedString {
+    char* str;
+    struct TrackedString* next;
+}* TrackedString_ptr;
+
+static TrackedString_ptr trackedStrings = NULL;
+
+char* lexer_TrackString(char* str){
+    TrackedString_ptr node = safeCalloc(1, sizeof(struct TrackedString), "allocating tracked lexer string node");
+    node->str = str;
+    node->next = trackedStrings;
+    trackedStrings = node;
+    return str;
+}
+
+void lexer_FreeTrackedStrings(void){
+    TrackedString_ptr node = trackedStrings;
+    while(node){
+        TrackedString_ptr next = node->next;
+        safeFree(&node->str, "freeing tracked lexer string");
+        safeFree(&node, "freeing tracked lexer string node");
+        node = next;
+    }
+    trackedStrings = NULL;
+}

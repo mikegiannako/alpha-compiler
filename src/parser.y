@@ -12,6 +12,10 @@
     #include "../include/intermediate_rule_types.h"
     #include "../include/quad.h"
     #include "../include/config.h"
+    #include "../include/generator.h"
+    #include "../include/instruction.h"
+    #include "../include/vm_code.h"
+    #include "../include/binary.h"
 
     #ifdef DEBUG
         #define RULE_PRINT(rule) {fprintf(stderr, "LINE: %d ", yylineno); fprintf(stderr, rule);}
@@ -367,8 +371,25 @@ int main(int argc, char** argv){
     
     quad_PrintAll();
 
-    // Cleaning Up
+    #ifdef DEBUG
+        printf("\n\nGenerating target code...\n");
+    #endif
+
+    generateInstructions();
+    printInstructions();
+    writeBinaryFile(outputFileName);
+
+    // Cleaning Up. The constant tables and instructions must be freed after the
+    // binary is written and the tables printed above (libFuncs borrows symbol
+    // table names, so free it before symbolTable_FreeAll()).
+    vmCode_FreeAll();
+    instructions_FreeAll();
+    exprArena_FreeAll();
+    callArena_FreeAll();
+    stmtArena_FreeAll();
+    forPrefixArena_FreeAll();
     symbolTable_FreeAll();
+    lexer_FreeTrackedStrings();
     uintStack_Clear(&functionScopeStack);
     uintStack_Clear(&loopCounterStack);
     uintStack_Clear(&funcstartJumpStack);

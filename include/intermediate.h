@@ -27,6 +27,9 @@ void restoreCurScopeOffset(unsigned int n);
 
 void expr_CheckArithm(Expr_ptr expr, const char* context);
 
+void exprArena_FreeAll(void);
+void callArena_FreeAll(void);
+
 Expr_ptr expr_FromLvalue(SymbolTableEntry_ptr sym);
 Expr_ptr expr_New(ExprType_enum type);
 Expr_ptr expr_NewConstString(const char* s);

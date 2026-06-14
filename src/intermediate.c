@@ -8,6 +8,75 @@
 #include "../include/quad.h"
 #include "../include/utils.h"
 
+// ------------------ Expr Arena ------------------
+// Every Expr is registered here at creation and freed exactly once at the end of
+// compilation via exprArena_FreeAll(). Exprs are aliased (the same Expr_ptr is
+// stored in multiple quads and in other exprs' `index`/`next`/`elist` fields), so
+// they must never be freed through those references. The arena owns them instead:
+// one allocation -> one registration -> one free, regardless of aliasing.
+
+typedef struct ExprNode {
+    Expr_ptr expr;
+    struct ExprNode* next;
+}* ExprNode_ptr;
+
+static ExprNode_ptr exprArena = NULL;
+
+static Expr_ptr exprArena_Register(Expr_ptr expr){
+    ExprNode_ptr node = safeCalloc(1, sizeof(struct ExprNode), "registering expr in arena");
+    node->expr = expr;
+    node->next = exprArena;
+    exprArena = node;
+    return expr;
+}
+
+void exprArena_FreeAll(void){
+    ExprNode_ptr node = exprArena;
+    while(node){
+        ExprNode_ptr next = node->next;
+        // strConst is the only heap field an Expr owns. sym is borrowed from the
+        // symbol table; index/next are other arena Exprs freed as their own nodes.
+        if(node->expr->type == CONST_STRING_EXPRTYPE){
+            safeFree(&node->expr->strConst, "freeing arena expr const string");
+        }
+        safeFree(&node->expr, "freeing arena expr");
+        safeFree(&node, "freeing arena expr node");
+        node = next;
+    }
+    exprArena = NULL;
+}
+
+// ------------------ Call Arena ------------------
+// Call structs are grammar bookkeeping consumed mid-parse; same arena treatment
+// as exprs. A Call owns nothing: elist is an arena Expr, method_name is a
+// lexer-tracked string, isMethodCall is a scalar. So only the struct is freed.
+
+typedef struct CallNode {
+    Call_ptr call;
+    struct CallNode* next;
+}* CallNode_ptr;
+
+static CallNode_ptr callArena = NULL;
+
+static Call_ptr callArena_Register(Call_ptr call){
+    CallNode_ptr node = safeCalloc(1, sizeof(struct CallNode), "registering call in arena");
+    node->call = call;
+    node->next = callArena;
+    callArena = node;
+    return call;
+}
+
+void callArena_FreeAll(void){
+    CallNode_ptr node = callArena;
+    while(node){
+        CallNode_ptr next = node->next;
+        safeFree(&node->call, "freeing arena call");
+        safeFree(&node, "freeing arena call node");
+        node = next;
+    }
+    callArena = NULL;
+}
+
 // ------------------ Scopes/Spaces ------------------
 
 unsigned int programVarOffset = 0;
@@ -85,7 +154,7 @@ void expr_CheckArithm (Expr_ptr expr, const char* context){
 Expr_ptr expr_FromLvalue(SymbolTableEntry_ptr sym){
     assert(sym);
 
-    Expr_ptr expr = safeCalloc(1, sizeof(struct Expr), "creating new Expr to wrap SymbolTableEntry");
+    Expr_ptr expr = exprArena_Register(safeCalloc(1, sizeof(struct Expr), "creating new Expr to wrap SymbolTableEntry"));
     expr->sym = sym;
 
     switch(sym->type){
@@ -108,13 +177,13 @@ Expr_ptr expr_FromLvalue(SymbolTableEntry_ptr sym){
 }
 
 Expr_ptr expr_New(ExprType_enum type){
-    Expr_ptr expr = safeCalloc(1, sizeof(struct Expr), "creating new Expr from type");
+    Expr_ptr expr = exprArena_Register(safeCalloc(1, sizeof(struct Expr), "creating new Expr from type"));
     expr->type = type;
     return expr;
 }
 
 Expr_ptr newTempExpr(){
-    Expr_ptr expr = safeCalloc(1, sizeof(struct Expr), "creating new Temp Expr");
+    Expr_ptr expr = exprArena_Register(safeCalloc(1, sizeof(struct Expr), "creating new Temp Expr"));
     expr->type = VAR_EXPRTYPE;
     return expr;
 }
@@ -212,7 +281,7 @@ Expr_ptr makeCall(Expr_ptr lvalue, Expr_ptr args){
 }
 
 Call_ptr createCallValue(bool isMethodCall, const char* method_name, Expr_ptr elist){
-    Call_ptr temp = safeCalloc(1, sizeof(struct Call), "creating Call object");
+    Call_ptr temp = callArena_Register(safeCalloc(1, sizeof(struct Call), "creating Call object"));
 
     temp->elist = elist;
     temp->method_name = method_name ? method_name : NULL;
@@ -242,6 +311,9 @@ SymbolTableEntry_ptr newTempVar(){
     if(entry == NULL){
         entry = symbolTable_Insert(tempVarName, (scope == 0) ? GLOBAL_VAR_SYMTYPE : LOCAL_VAR_SYMTYPE);
     }
+
+    // Both Lookup and Insert copy the name, so the original is no longer needed.
+    safeFree(&tempVarName, "freeing temp var name after symbol table copy");
 
     tempVarCounter++;
 

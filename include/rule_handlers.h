@@ -15,6 +15,8 @@ extern UIntStack_ptr tempVarCountStack;
 extern UIntStack_ptr scopeOffsetStack;
 
 // ------------------ STMT ------------------
+void stmtArena_FreeAll(void);
+void forPrefixArena_FreeAll(void);
 void HANDLE_STMT_GENERIC(Stmt_ptr* stmt);
 void HANDLE_STMTLIST(Stmt_ptr* stmt_list, Stmt_ptr parsed_stmts, Stmt_ptr curr_stmt);
 void HANDLE_BREAK(Stmt_ptr* stmt);

@@ -12,7 +12,11 @@ SRCS = \
 	src/rule_handlers.c \
 	src/intermediate.c \
 	src/quad.c \
-	src/config.c
+	src/config.c \
+	src/instruction.c \
+	src/vm_code.c \
+	src/generator.c \
+	src/binary.c
 
 .PHONY: all clean
 

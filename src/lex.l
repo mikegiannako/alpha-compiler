@@ -94,8 +94,7 @@ IGNORE         [ \t\n\r]
 }
 
 {IDENT} {
-    // TODO: perhaps implement global list of string pointer that need to be freed at the end of the program
-    yylval.stringValue = safeStrDup(yytext, "copying ID name to yylval");
+    yylval.stringValue = lexer_TrackString(safeStrDup(yytext, "copying ID name to yylval"));
     return ID_TOK;
 }
 
@@ -111,8 +110,7 @@ IGNORE         [ \t\n\r]
 <STRING_STATE>\" {
 
     char* finalizedString = strBuffer_FinalizeString(stringBuffer);
-    // TODO: perhaps implement global list of string pointer that need to be freed at the end of the program
-    yylval.stringValue = safeStrDup(finalizedString, "copying finalized string to yylval");
+    yylval.stringValue = lexer_TrackString(safeStrDup(finalizedString, "copying finalized string to yylval"));
     strBuffer_Free(stringBuffer); // Free the string buffer
 
     BEGIN(INITIAL);

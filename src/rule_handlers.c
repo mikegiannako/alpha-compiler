@@ -7,10 +7,73 @@
 
 #include <assert.h>
 
+// ------------------ STMT Arena ------------------
+// Stmt structs are grammar bookkeeping. They are aliased/consumed mid-parse (a
+// stmt_list merges its children), so rather than free them inline they are
+// registered here and freed once at the end via stmtArena_FreeAll(). A Stmt owns
+// nothing (breakList/contList/returnList are scalar quad-index lists), so only
+// the struct is freed.
+
+typedef struct StmtNode {
+    Stmt_ptr stmt;
+    struct StmtNode* next;
+}* StmtNode_ptr;
+
+static StmtNode_ptr stmtArena = NULL;
+
+static Stmt_ptr stmtArena_Register(Stmt_ptr stmt){
+    StmtNode_ptr node = safeCalloc(1, sizeof(struct StmtNode), "registering stmt in arena");
+    node->stmt = stmt;
+    node->next = stmtArena;
+    stmtArena = node;
+    return stmt;
+}
+
+void stmtArena_FreeAll(void){
+    StmtNode_ptr node = stmtArena;
+    while(node){
+        StmtNode_ptr next = node->next;
+        safeFree(&node->stmt, "freeing arena stmt");
+        safeFree(&node, "freeing arena stmt node");
+        node = next;
+    }
+    stmtArena = NULL;
+}
+
+// ------------------ ForLoopPrefix Arena ------------------
+// Same treatment as Stmt: a ForLoopPrefix is grammar bookkeeping consumed by the
+// forstmt rule and owns nothing (all fields are scalar quad indices/lists).
+
+typedef struct ForPrefixNode {
+    ForLoopPrefix_ptr prefix;
+    struct ForPrefixNode* next;
+}* ForPrefixNode_ptr;
+
+static ForPrefixNode_ptr forPrefixArena = NULL;
+
+static ForLoopPrefix_ptr forPrefixArena_Register(ForLoopPrefix_ptr prefix){
+    ForPrefixNode_ptr node = safeCalloc(1, sizeof(struct ForPrefixNode), "registering forprefix in arena");
+    node->prefix = prefix;
+    node->next = forPrefixArena;
+    forPrefixArena = node;
+    return prefix;
+}
+
+void forPrefixArena_FreeAll(void){
+    ForPrefixNode_ptr node = forPrefixArena;
+    while(node){
+        ForPrefixNode_ptr next = node->next;
+        safeFree(&node->prefix, "freeing arena forprefix");
+        safeFree(&node, "freeing arena forprefix node");
+        node = next;
+    }
+    forPrefixArena = NULL;
+}
+
 // ------------------ STMT ------------------
 
 void HANDLE_STMT_GENERIC(Stmt_ptr* stmt){
-    *stmt = safeCalloc(1, sizeof(struct Stmt), "creating an empty Stmt struct");
+    *stmt = stmtArena_Register(safeCalloc(1, sizeof(struct Stmt), "creating an empty Stmt struct"));
 }
 
 
@@ -21,8 +84,8 @@ void HANDLE_STMTLIST(Stmt_ptr* stmt_list, Stmt_ptr parsed_stmts, Stmt_ptr curr_s
     (*stmt_list)->contList  = quadIndexList_Merge(parsed_stmts->contList, curr_stmt->contList);
     (*stmt_list)->returnList  = quadIndexList_Merge(parsed_stmts->returnList, curr_stmt->returnList);
 
-    safeFree(&parsed_stmts, "freeing duplicate Stmt memory after merging with new upated list");
-    safeFree(&curr_stmt,    "freeing duplicate Stmt memory after merging with new upated list");
+    // The merged children are not freed here: the arena owns every Stmt and frees
+    // each exactly once at the end, which is safe under the mid-parse aliasing.
 }
 
 
@@ -710,7 +773,7 @@ void RULE_FORSTMT_FORPREFIX_ELIST_STMT(Stmt_ptr* forstmt, ForLoopPrefix_ptr forp
 
 
 void RULE_FORPREFIX_FOR_ELIST_EXPR(ForLoopPrefix_ptr* forprefix, Expr_ptr elist, unsigned int marker, Expr_ptr expr){
-    *forprefix = safeCalloc(1, sizeof(struct ForLoopPrefix), "creating new ForLoopPrefix struct for forprefix rule");
+    *forprefix = forPrefixArena_Register(safeCalloc(1, sizeof(struct ForLoopPrefix), "creating new ForLoopPrefix struct for forprefix rule"));
     (*forprefix)->test = marker;
 
     if(config.shortCircuitBackpatch){
