@@ -20,7 +20,6 @@ char* iopnames[] = {
     "if_greater",
     "call",
     "pusharg",
-    "getretval",
     "funcenter",
     "funcexit",
     "newtable",

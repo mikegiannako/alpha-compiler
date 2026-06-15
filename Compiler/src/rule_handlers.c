@@ -1,5 +1,5 @@
 #include "../include/rule_handlers.h"
-#include "../include/error_macros.h"
+#include "error_macros.h"
 #include "../include/symtable.h"
 #include "../include/utils.h"
 #include "../include/quad.h"

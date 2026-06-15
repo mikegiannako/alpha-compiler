@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../include/memory_operations.h"
-#include "../include/error_macros.h"
+#include "memory_operations.h"
+#include "error_macros.h"
 
 void* _safeCalloc(size_t num, size_t size, const char* desc, const char* file, int line) {
     void* ptr = calloc(num, size);

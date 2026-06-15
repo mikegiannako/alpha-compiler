@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "../include/intermediate.h"
-#include "../include/memory_operations.h"
-#include "../include/error_macros.h"
+#include "memory_operations.h"
+#include "error_macros.h"
 #include "../include/quad.h"
 #include "../include/utils.h"
 

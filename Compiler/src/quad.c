@@ -3,8 +3,8 @@
 #include <string.h>
 #include "../include/quad.h"
 #include "../include/utils.h"
-#include "../include/error_macros.h"
-#include "../include/memory_operations.h"
+#include "error_macros.h"
+#include "memory_operations.h"
 
 // Having the quad array be 1-indexed because there could be bugs/issues with unpatched labels which in theory point to quadArr[0]
 #define QUAD_ARR_EMPTY_SIZE 1U

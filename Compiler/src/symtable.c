@@ -1,6 +1,6 @@
 #include "../include/symtable.h"
-#include "../include/memory_operations.h"
-#include "../include/error_macros.h"
+#include "memory_operations.h"
+#include "error_macros.h"
 #include "../include/generic_stack.h"
 
 #include <string.h>

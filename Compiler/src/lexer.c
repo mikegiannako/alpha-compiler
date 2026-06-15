@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include "../include/lexer.h"
-#include "../include/memory_operations.h"
+#include "memory_operations.h"
 
 #define INITIAL_BUFFER_CAPACITY 32
 

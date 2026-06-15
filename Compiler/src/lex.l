@@ -6,8 +6,8 @@
     #include "../include/lexer.h"
     #include "../include/utils.h"
     #include "../include/generic_stack.h"
-    #include "../include/error_macros.h"
-    #include "../include/memory_operations.h"
+    #include "error_macros.h"
+    #include "memory_operations.h"
     #include "../build/parser.h"
 
     StrBuffer_ptr stringBuffer;
