@@ -226,14 +226,7 @@ void quad_PrintAll(){
     printf("\n");
 
     FILE* quadsFile = fopen("quads.txt", "w");
-    unsigned int prevLine = 0;
     for(unsigned int i = 1; i < nextQuadIndex; i++){
-        unsigned int curLine = quadArr[i].line;
-        if(curLine != prevLine){
-            printf("\n");
-            fprintf(quadsFile, "\n");
-            prevLine = curLine;
-        }
         quad_PrintSingle(stdout, quadArr + i, i);
         quad_PrintSingle(quadsFile, quadArr + i, i);
     }

@@ -37,6 +37,10 @@ struct SymbolTableEntry {
     unsigned int totalLocals;
     unsigned int totalFormals;
 
+    // Set when the function body contains at least one `return` statement. Used by
+    // the best-effort check that warns when a no-return function's result is used.
+    bool hasReturn;
+
     struct SymbolTableEntry *next;
 };
 

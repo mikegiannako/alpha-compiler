@@ -91,7 +91,7 @@ void HANDLE_STMTLIST(Stmt_ptr* stmt_list, Stmt_ptr parsed_stmts, Stmt_ptr curr_s
 
 void HANDLE_BREAK(Stmt_ptr* stmt){
     if(loopCounter == 0){
-        USER_WARNING("SYNTAX", "Attempted to `break` outside of loop");
+        USER_ERROR("SYNTAX", "Attempted to `break` outside of loop");
     }
 
     HANDLE_STMT_GENERIC(stmt);
@@ -101,7 +101,7 @@ void HANDLE_BREAK(Stmt_ptr* stmt){
 
 void HANDLE_CONTINUE(Stmt_ptr* stmt){
     if(loopCounter == 0){
-        USER_WARNING("SYNTAX", "Attempted to `continue` outside of loop");
+        USER_ERROR("SYNTAX", "Attempted to `continue` outside of loop");
     }
 
     HANDLE_STMT_GENERIC(stmt);
@@ -112,10 +112,14 @@ void HANDLE_CONTINUE(Stmt_ptr* stmt){
 
 void HANDLE_RETURN(Stmt_ptr* stmt, Expr_ptr expr){
     if(uintStack_IsEmpty(functionScopeStack)){
-        USER_WARNING("SYNTAX", "Attempted to `return` outside of function");
+        USER_ERROR("SYNTAX", "Attempted to `return` outside of function");
     }
 
     if(expr) emitIfShortCircuitStmt(&expr);
+
+    // Record that the enclosing function has a return statement (for the
+    // no-return-value diagnostic).
+    noReturnCheck_MarkReturn();
 
     quad_Emit(RET_QUADOP, expr, NULL, NULL, NO_LABEL);
 
@@ -159,13 +163,13 @@ double arithmOpEval(enum yytokentype op, double left, double right){
         case MUL_TOK: return left * right;
         case DIV_TOK: 
             if(right == 0){
-                USER_WARNING("COMPILER", "division with 0 (when evaluating division with constants)");
+                USER_ERROR("COMPILER", "division with 0 (when evaluating division with constants)");
                 return 0;
             }
             return left / right;
         case MOD_TOK:
             if(right == 0){
-                USER_WARNING("COMPILER", "division with 0 (when evaluating division with constants)");
+                USER_ERROR("COMPILER", "division with 0 (when evaluating division with constants)");
                 return 0;
             }
             return (int)left % (int)right;
@@ -196,7 +200,7 @@ void RULE_EXPR_ARITHOP(Expr_ptr* expr, Expr_ptr left, Expr_ptr right, enum yytok
     }
 
     if(right->type == CONST_NUM_EXPRTYPE && right->numConst == 0 && op == DIV_TOK){
-        USER_WARNING("COMPILER", "division with 0");
+        USER_ERROR("COMPILER", "division with 0");
     }
 
     *expr = expr_New(ARITH_EXPR_EXPRTYPE);
@@ -299,11 +303,11 @@ void check_arithop_lvalue_eligibility(SymbolTableEntry_ptr lvalue, const char* o
     if(!lvalue) return;
     
     if(lvalue->type == LIB_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to %s Library Function `%s`", operator, lvalue->name);
+        USER_ERROR("SYNTAX", "Attempted to %s Library Function `%s`", operator, lvalue->name);
     }
 
     if(lvalue->type == USER_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to %s User Function `%s` found in scope %d", operator, lvalue->name, lvalue->scope);
+        USER_ERROR("SYNTAX", "Attempted to %s User Function `%s` found in scope %d", operator, lvalue->name, lvalue->scope);
     }
 
 }
@@ -381,9 +385,9 @@ void HANDLE_ASSIGNEXPR(Expr_ptr* assignexpr, Expr_ptr lvalue, Expr_ptr expr){
     if(!lvalue) return;
 
     if(lvalue->sym->type == LIB_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to assign value to Library Function '%s'", lvalue->sym->name);
+        USER_ERROR("SYNTAX", "Attempted to assign value to Library Function '%s'", lvalue->sym->name);
     } else if(lvalue->sym->type == USER_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to assign value to User Function '%s'", lvalue->sym->name);
+        USER_ERROR("SYNTAX", "Attempted to assign value to User Function '%s'", lvalue->sym->name);
     }
 
     emitIfShortCircuitStmt(&expr);
@@ -421,7 +425,7 @@ void HANDLE_LVALUE_ID(Expr_ptr* lvalue, const char* id){
     if(entry->scope != 0 && !uintStack_IsEmpty(functionScopeStack)){
         unsigned int func_scope = uintStack_Top(functionScopeStack);
         if(entry->scope <= func_scope){
-            USER_WARNING("SYNTAX", "Symbol `%s` (scope %d) is unreachable as there is at least one active User Function between it and the point of reference (last open function is at scope %d) ", id, entry->scope, func_scope);
+            USER_ERROR("SYNTAX", "Symbol `%s` (scope %d) is unreachable as there is at least one active User Function between it and the point of reference (last open function is at scope %d) ", id, entry->scope, func_scope);
         }
     }
 
@@ -439,7 +443,7 @@ void HANDLE_LVALUE_LOCAL_ID(Expr_ptr* lvalue, const char* id){
     if(scope != 0){
         entry = symbolTable_GlobalLookup(id);
         if(entry && entry->type == LIB_FUNC_SYMTYPE){
-            USER_WARNING("SYNTAX", "`local %s` attempting to overshadow Library Function `%s`", id, id);
+            USER_ERROR("SYNTAX", "`local %s` attempting to overshadow Library Function `%s`", id, id);
             return;
         }
     }
@@ -452,7 +456,7 @@ void HANDLE_LVALUE_GLOBAL_ID(Expr_ptr* lvalue, const char* id){
     SymbolTableEntry_ptr entry = symbolTable_GlobalLookup(id);
 
     if(!entry){
-        USER_WARNING("SYNTAX", "Symbol `%s` does not exist in global scope", id);
+        USER_ERROR("SYNTAX", "Symbol `%s` does not exist in global scope", id);
     }
 
     *lvalue = expr_FromLvalue(entry);
@@ -464,7 +468,7 @@ void HANDLE_MEMBER_DOT(Expr_ptr* member, Expr_ptr lvalue, const char* id){
     if(!lvalue) return;
 
     if(lvalue->sym->type == LIB_FUNC_SYMTYPE || lvalue->sym->type == USER_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to get key '%s' on function '%s' instead of an object", id, lvalue->sym->name);
+        USER_ERROR("SYNTAX", "Attempted to get key '%s' on function '%s' instead of an object", id, lvalue->sym->name);
     }
 
     *member = memberItem(lvalue, id);
@@ -474,7 +478,7 @@ void HANDLE_MEMBER_BRACKET(Expr_ptr* member, Expr_ptr lvalue, Expr_ptr expr){
     if(!lvalue) return;
 
     if(lvalue->sym->type == LIB_FUNC_SYMTYPE || lvalue->sym->type == USER_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "Attempted to get member value on function '%s' instead of an object", lvalue->sym->name);
+        USER_ERROR("SYNTAX", "Attempted to get member value on function '%s' instead of an object", lvalue->sym->name);
     }
 
     emitIfShortCircuitStmt(&expr);
@@ -492,7 +496,7 @@ void HANDLE_CALL_LVALUE_CALLSUFFIX(Expr_ptr* call, Expr_ptr lvalue, Call_ptr cal
     if(!lvalue) return;
 
     if((lvalue->sym->type == LIB_FUNC_SYMTYPE || lvalue->sym->type == USER_FUNC_SYMTYPE) && callsuffix->isMethodCall){
-        USER_WARNING("SYNTAX", "Attempted to call method '%s' on function '%s' instead of an object", callsuffix->method_name, lvalue->sym->name);
+        USER_ERROR("SYNTAX", "Attempted to call method '%s' on function '%s' instead of an object", callsuffix->method_name, lvalue->sym->name);
     }
 
     lvalue = emitIfTableItem(lvalue);
@@ -560,6 +564,8 @@ void RULE_FUNCDEF(SymbolTableEntry_ptr* funcdef, SymbolTableEntry_ptr funcdeclar
     funcdeclare->totalFormals = funcparams;
     *funcdef = funcdeclare;
 
+    noReturnCheck_ExitFunc();
+
     quad_Emit(FUNC_END_QUADOP, expr_FromLvalue(*funcdef), NULL, NULL, NO_LABEL);
 
     if(config.jumpBeforeFuncstart){
@@ -579,13 +585,13 @@ void HANDLE_FUNCNAME_ID(SymbolTableEntry_ptr *funcname, const char* id){
     }
 
     if(entry->type == USER_FUNC_SYMTYPE && entry->scope == scope){
-        USER_WARNING("SYNTAX", "User Function `%s` has already been declared in the same scope", id);
+        USER_ERROR("SYNTAX", "User Function `%s` has already been declared in the same scope", id);
         return;
     } else if((entry->type == LOCAL_VAR_SYMTYPE || entry->type == GLOBAL_VAR_SYMTYPE || entry->type == FORMAL_VAR_SYMTYPE) && entry->scope == scope){
-        USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a User Function (already exists as Variable in the same scope)", id);
+        USER_ERROR("SYNTAX", "Attempted to redeclare symbol `%s` as a User Function (already exists as Variable in the same scope)", id);
         return;
     } else if(entry->type == LIB_FUNC_SYMTYPE){
-        USER_WARNING("SYNTAX", "User Function '%s' declaration attempting to overshadow Library Function", id);
+        USER_ERROR("SYNTAX", "User Function '%s' declaration attempting to overshadow Library Function", id);
         return;
     }
 
@@ -610,6 +616,8 @@ void HANDLE_FUNCDECLARE_FUNCNAME(SymbolTableEntry_ptr *funcdecl, SymbolTableEntr
 
     name_sym->iaddress = quad_NextLabel();
     *funcdecl = name_sym;
+    // Track the function being defined so a `return` in its body marks the right one.
+    noReturnCheck_EnterFunc(name_sym);
     quad_Emit(FUNC_START_QUADOP, expr_FromLvalue(*funcdecl), NULL, NULL, NO_LABEL);
     
     // Keeping the current scope offset as we'll need to reset it for the formal arguments
@@ -658,13 +666,13 @@ void HANDLE_IDLIST(unsigned int *idlist, const char* id, unsigned int list_tail)
 
     if(entry){
         /* if(entry->type == USER_FUNC_SYMTYPE){
-            USER_WARNING("SYNTAX", "Attempted to redeclare symbol `%s` as a Formal Argument (already exists as active User Function in scope %d)", id, entry->scope);
+            USER_ERROR("SYNTAX", "Attempted to redeclare symbol `%s` as a Formal Argument (already exists as active User Function in scope %d)", id, entry->scope);
             return;
         } else */if(entry->type == LIB_FUNC_SYMTYPE){
-            USER_WARNING("SYNTAX", "Formal Argument '%s' declaration attempting to overshadow Library Function", id);
+            USER_ERROR("SYNTAX", "Formal Argument '%s' declaration attempting to overshadow Library Function", id);
             return;
         } else if(entry->type == FORMAL_VAR_SYMTYPE && entry->scope == scope){
-            USER_WARNING("SYNTAX", "Attempted to redeclare Formal Argument '%s' (already exists in the same function declaration)", id);
+            USER_ERROR("SYNTAX", "Attempted to redeclare Formal Argument '%s' (already exists in the same function declaration)", id);
             return;
         }
     }

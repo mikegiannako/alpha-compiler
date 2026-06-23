@@ -50,6 +50,19 @@ Expr_ptr makeCall(Expr_ptr lvalue, Expr_ptr args);
 Call_ptr createCallValue(bool isMethodCall, const char* method_name, Expr_ptr elist);
 
 
+// ------------------ No-return-value check ------------------
+// Best-effort, parse-time diagnostic: warns when the result of a call to a user
+// function that has no `return` statement is used as a value. Detection is limited
+// to direct calls of statically-known user functions (not calls through variables,
+// parameters, anonymous values, methods or functors).
+
+void noReturnCheck_EnterFunc(SymbolTableEntry_ptr func);  // function definition begins
+void noReturnCheck_MarkReturn(void);                      // a `return` was seen in the current function
+void noReturnCheck_ExitFunc(void);                        // function definition ends
+void noReturnCheck_CancelIfCallResult(Expr_ptr expr);     // expr was discarded as a bare statement
+void noReturnCheck_ReportAll(void);                       // emit warnings after parsing completes
+
+
 // ------------------ Temp Var ------------------
 
 extern unsigned int tempVarCounter;

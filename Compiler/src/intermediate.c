@@ -148,7 +148,7 @@ void expr_CheckArithm (Expr_ptr expr, const char* context){
         expr->type == LIBRARY_FUNC_EXPRTYPE ||
         expr->type == BOOL_EXPR_EXPRTYPE 
     )
-    USER_WARNING("COMPILER", "Illegal expr type used in %s", context);
+    USER_ERROR("COMPILER", "Illegal expr type used in %s", context);
 }
 
 Expr_ptr expr_FromLvalue(SymbolTableEntry_ptr sym){
@@ -257,6 +257,76 @@ unsigned int expr_IsTemp (Expr_ptr expr){
 
 // ------------------ Call ------------------
 
+// ------------------ No-return-value check ------------------
+// See intermediate.h. A pending record is created for every direct call to a user
+// function; if the call's result expression is later discarded as a bare statement
+// the record is cancelled, otherwise (a value use) it is reported at end of parse
+// unless the callee turned out to have a return statement.
+
+typedef struct NoReturnPending {
+    SymbolTableEntry_ptr callee;
+    int                  line;
+    bool                 cancelled;
+} NoReturnPending;
+
+static NoReturnPending* noReturnPending      = NULL;
+static unsigned         noReturnPendingCount = 0;
+static unsigned         noReturnPendingCap   = 0;
+
+// User functions currently being defined (innermost on top) so a `return` marks the
+// right one. Reuses IntPtrStack via pointer casts to avoid a circular-include for a
+// dedicated symbol-pointer stack.
+static IntPtrStack_ptr  noReturnFuncStack = NULL;
+
+void noReturnCheck_EnterFunc(SymbolTableEntry_ptr func){
+    intPtrStack_Push(&noReturnFuncStack, (int*)func);
+}
+
+void noReturnCheck_MarkReturn(void){
+    if(!intPtrStack_IsEmpty(noReturnFuncStack)){
+        ((SymbolTableEntry_ptr)intPtrStack_Top(noReturnFuncStack))->hasReturn = true;
+    }
+}
+
+void noReturnCheck_ExitFunc(void){
+    if(!intPtrStack_IsEmpty(noReturnFuncStack)){
+        intPtrStack_Pop(&noReturnFuncStack);
+    }
+}
+
+static void noReturnCheck_RegisterCall(SymbolTableEntry_ptr callee, Expr_ptr result){
+    if(noReturnPendingCount == noReturnPendingCap){
+        noReturnPendingCap = noReturnPendingCap ? noReturnPendingCap * 2 : 16;
+        noReturnPending = safeRealloc(noReturnPending, noReturnPendingCap * sizeof(NoReturnPending), "growing the no-return pending list");
+    }
+    noReturnPending[noReturnPendingCount].callee    = callee;
+    noReturnPending[noReturnPendingCount].line      = yylineno;
+    noReturnPending[noReturnPendingCount].cancelled = false;
+    result->noReturnPendingIdx = ++noReturnPendingCount; // 1-based; 0 means "no record"
+}
+
+void noReturnCheck_CancelIfCallResult(Expr_ptr expr){
+    if(expr && expr->noReturnPendingIdx){
+        noReturnPending[expr->noReturnPendingIdx - 1].cancelled = true;
+    }
+}
+
+void noReturnCheck_ReportAll(void){
+    for(unsigned i = 0; i < noReturnPendingCount; i++){
+        NoReturnPending* p = &noReturnPending[i];
+        if(!p->cancelled && !p->callee->hasReturn){
+            fprintf(stderr,
+                ORANGE_TEXT "[SEMANTIC WARNING]" RESET_TEXT
+                " - return value of '%s' is used as a value, but '%s' has no return statement"
+                BLUE_TEXT " | %s:%d" RESET_TEXT "\n",
+                p->callee->name, p->callee->name, sourceFileName, p->line);
+        }
+    }
+    if(noReturnPending) safeFree(&noReturnPending, "freeing the no-return pending list");
+    noReturnPendingCount = noReturnPendingCap = 0;
+    intPtrStack_Clear(&noReturnFuncStack);
+}
+
 Expr_ptr makeCall(Expr_ptr lvalue, Expr_ptr args){
     Expr_ptr func = emitIfTableItem(lvalue);
 
@@ -268,7 +338,7 @@ Expr_ptr makeCall(Expr_ptr lvalue, Expr_ptr args){
     }
 
     if(lvalue->sym->totalFormals > totalArgs){
-        USER_WARNING("COMPILER", "Function %s called with %d arguments, expected %u", lvalue->sym->name, totalArgs, lvalue->sym->totalFormals);
+        USER_ERROR("COMPILER", "Function %s called with %d arguments, expected %u", lvalue->sym->name, totalArgs, lvalue->sym->totalFormals);
     }
 
     quad_Emit(CALL_QUADOP, NULL, func, NULL, NO_LABEL);
@@ -277,6 +347,14 @@ Expr_ptr makeCall(Expr_ptr lvalue, Expr_ptr args){
     result->sym = newTempVar();
 
     quad_Emit(GET_RET_VAL_QUADOP, result, NULL, NULL, NO_LABEL);
+
+    // Best-effort: remember this call when it targets a statically-known user
+    // function, so using `result` as a value can be flagged later if that function
+    // has no return statement. Bare `call;` statements cancel the pending record.
+    if(lvalue->sym && lvalue->sym->type == USER_FUNC_SYMTYPE){
+        noReturnCheck_RegisterCall(lvalue->sym, result);
+    }
+
     return result;
 }
 
@@ -306,7 +384,12 @@ void resetTempVarCounter(){
 
 SymbolTableEntry_ptr newTempVar(){
     char* tempVarName = newTempVarName();
-    SymbolTableEntry_ptr entry = symbolTable_Lookup(tempVarName);
+    // Temps must resolve within the current scope only. A full symbolTable_Lookup
+    // also searches enclosing scopes, so a temp like "_t0" used inside a nested
+    // function would reuse the *enclosing* function's "_t0" slot instead of
+    // getting its own -- two temps then collapse onto the same local offset and
+    // overlap at runtime (e.g. self.data[self.size]).
+    SymbolTableEntry_ptr entry = symbolTable_LocalLookup(tempVarName);
 
     if(entry == NULL){
         entry = symbolTable_Insert(tempVarName, (scope == 0) ? GLOBAL_VAR_SYMTYPE : LOCAL_VAR_SYMTYPE);

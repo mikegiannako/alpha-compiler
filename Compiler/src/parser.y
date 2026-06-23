@@ -123,7 +123,7 @@ returnstmt:     RETURN_TOK expr SEMICOLON_TOK   { HANDLE_RETURN(&$$, $2); RULE_P
                 | RETURN_TOK SEMICOLON_TOK      { HANDLE_RETURN(&$$, NULL); RULE_PRINT("returnstmt <- RETURN ;\n");}
                 ;   
 
-stmt:           expr SEMICOLON_TOK      { emitIfShortCircuitStmt(&$1); HANDLE_STMT_GENERIC(&$$); RULE_PRINT("statement <- expression ;\n");}
+stmt:           expr SEMICOLON_TOK      { emitIfShortCircuitStmt(&$1); noReturnCheck_CancelIfCallResult($1); HANDLE_STMT_GENERIC(&$$); RULE_PRINT("statement <- expression ;\n");}
                 | ifstmt 		        { $$ = $1; RULE_PRINT("statement <- if\n");}
                 | whilestmt 		    { $$ = $1; RULE_PRINT("statement <- while\n");}
                 | forstmt 		        { $$ = $1; RULE_PRINT("statement <- for\n");}
@@ -361,22 +361,25 @@ int main(int argc, char** argv){
     
     yyparse();
 
+    // Best-effort warning: a no-return user function whose result is used as a value.
+    noReturnCheck_ReportAll();
+
     #ifdef DEBUG
         printf("\n\nPrinting Symbol Table...\n");
         symbolTable_Print();
 
         printf("\n\n");
         printf("\nPrinting Quads...\n");
-    #endif
-    
-    quad_PrintAll();
-
-    #ifdef DEBUG
+        quad_PrintAll();
         printf("\n\nGenerating target code...\n");
     #endif
 
     generateInstructions();
-    printInstructions();
+
+    #ifdef DEBUG
+        printInstructions();
+    #endif
+
     writeBinaryFile(outputFileName);
 
     // Cleaning Up. The constant tables and instructions must be freed after the

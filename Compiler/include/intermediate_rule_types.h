@@ -39,6 +39,11 @@ typedef struct Expr {
     unsigned int            trueList;
     unsigned int            falseList;
 
+    // 1-based index into the no-return pending list when this expr is the result of
+    // a direct call to a user function (0 = not such a call result). Lets a bare
+    // `call;` statement cancel the pending "used as a value" warning for that call.
+    unsigned int            noReturnPendingIdx;
+
     struct Expr*            next;
 }* Expr_ptr;
 
