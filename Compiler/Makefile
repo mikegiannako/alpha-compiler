@@ -1,10 +1,6 @@
-CC = gcc
-CFLAGS = -Wall -g -fsanitize=address
+CC     = gcc
+CFLAGS = -Wall -g
 BFLAGS = --defines
-
-# -DDEBUG turns on verbose tracing: the symbol-table dump, quad and instruction
-# listings, and per-rule grammar traces. Off by default; `make debug` enables it.
-DEBUG =
 
 # Shared code (memory ops, error macros) lives in the repo-root common/ dir.
 COMMON = ../common
@@ -30,8 +26,7 @@ SRCS = \
 compiler: bison tokenizer src/lex.l $(SRCS)
 	$(CC) $(CFLAGS) $(DEBUG) $(INCLUDES) -o build/compiler build/parser.c build/tokenizer.c $(SRCS) -lfl
 
-# Verbose build: same as `compiler` but with -DDEBUG tracing compiled in.
-debug: DEBUG = -DDEBUG
+debug: DEBUG = -DDEBUG -fsanitize=address
 debug: compiler
 
 bison:	src/parser.y
